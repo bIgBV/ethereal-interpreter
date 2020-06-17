@@ -1,10 +1,13 @@
 [package]
-name = "ethereal-interpreter"
-version = "0.1.0"
-authors = ["bIgBV <bhargav.voleti93@gmail.com>"]
+authors = [ "bIgBV <bhargav.voleti93@gmail.com>" ]
 edition = "2018"
+name    = "ethereal-interpreter"
+version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 once_cell = "0.1.8"
+
+[dev-dependencies]
+pretty_assertions = "0.6.1"
