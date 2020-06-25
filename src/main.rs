@@ -4,12 +4,25 @@ use std::{
 };
 
 pub mod error;
-mod scanner;
+pub mod scanner;
+pub mod visitor;
 
 use scanner::Scanner;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
+
+    let expr = visitor::Expr::Unary(visitor::Unary {
+        operator: scanner::Token::new(scanner::TokenKind::Plus, 0, 1, 1),
+        right: Box::new(visitor::Expr::Literal(scanner::Token::new(
+            scanner::TokenKind::Number(scanner::EthNum(12f64)),
+            1,
+            3,
+            1,
+        ))),
+    });
+
+    println!("{:?}", expr);
 
     if dbg!(dbg!(args.len()) > 1) {
         println!("Usage: jlox [script]");

@@ -81,24 +81,28 @@ pub enum TokenKind {
 pub struct EthString(String);
 
 #[derive(Clone, PartialEq, PartialOrd, Debug)]
-pub struct EthNum(f64);
+pub struct EthNum(pub f64);
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Token<'a> {
+pub struct Token {
     kind: TokenKind,
-    lexeme: &'a str,
+    range: (usize, usize),
     line: usize,
 }
 
-impl<'a> Token<'a> {
-    pub fn new(kind: TokenKind, lexeme: &'a str, line: usize) -> Self {
-        Self { kind, lexeme, line }
+impl Token {
+    pub fn new(kind: TokenKind, start: usize, end: usize, line: usize) -> Self {
+        Self {
+            kind,
+            line,
+            range: (start, end),
+        }
     }
 }
 
 pub struct Scanner<'a> {
     source: &'a str,
-    tokens: Vec<Token<'a>>,
+    tokens: Vec<Token>,
     current: usize,
     start: usize,
     line: usize,
@@ -115,13 +119,18 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    pub fn scan_tokens(&mut self) -> &[Token<'a>] {
+    pub fn scan_tokens(&mut self) -> &[Token] {
         while !self.is_at_end() {
             self.start = self.current;
             self.scan_token();
         }
 
-        self.tokens.push(Token::new(TokenKind::EOF, "", self.line));
+        self.tokens.push(Token::new(
+            TokenKind::EOF,
+            self.source.len(),
+            self.source.len(),
+            self.line,
+        ));
 
         &self.tokens
     }
@@ -316,7 +325,7 @@ impl<'a> Scanner<'a> {
             right = self.current;
         }
         let text = self.source.get(left..right).expect("Unable to get substr");
-        self.tokens.push(Token::new(kind, text, self.line))
+        self.tokens.push(Token::new(kind, left, right, self.line))
     }
 }
 
@@ -330,8 +339,8 @@ mod test {
     fn it_works() {
         let text = "\"Hello\"";
         let expected = vec![
-            Token::new(TokenKind::Str(EthString(String::from("Hello"))), "Hello", 1),
-            Token::new(TokenKind::EOF, "", 1),
+            Token::new(TokenKind::Str(EthString(String::from("Hello"))), 1, 6, 1),
+            Token::new(TokenKind::EOF, 7, 7, 1),
         ];
 
         let mut scanner = Scanner::new(text);
@@ -342,14 +351,14 @@ mod test {
     fn identifier() {
         let text = "andy formless fo _ _123 _abc ab123";
         let expected = vec![
-            Token::new(TokenKind::Identifier, "andy", 1),
-            Token::new(TokenKind::Identifier, "formless", 1),
-            Token::new(TokenKind::Identifier, "fo", 1),
-            Token::new(TokenKind::Identifier, "_", 1),
-            Token::new(TokenKind::Identifier, "_123", 1),
-            Token::new(TokenKind::Identifier, "_abc", 1),
-            Token::new(TokenKind::Identifier, "ab123", 1),
-            Token::new(TokenKind::EOF, "", 1),
+            Token::new(TokenKind::Identifier, 0, 4, 1),
+            Token::new(TokenKind::Identifier, 5, 13, 1),
+            Token::new(TokenKind::Identifier, 14, 16, 1),
+            Token::new(TokenKind::Identifier, 17, 18, 1),
+            Token::new(TokenKind::Identifier, 19, 23, 1),
+            Token::new(TokenKind::Identifier, 24, 28, 1),
+            Token::new(TokenKind::Identifier, 29, 34, 1),
+            Token::new(TokenKind::EOF, 34, 34, 1),
         ];
 
         let mut scanner = Scanner::new(text);
@@ -360,12 +369,8 @@ mod test {
     fn longer_ident() {
         let text = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890_";
         let expected = vec![
-            Token::new(
-                TokenKind::Identifier,
-                "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890_",
-                1,
-            ),
-            Token::new(TokenKind::EOF, "", 1),
+            Token::new(TokenKind::Identifier, 0, 63, 1),
+            Token::new(TokenKind::EOF, 63, 63, 1),
         ];
 
         let mut scanner = Scanner::new(text);
@@ -376,22 +381,22 @@ mod test {
     fn keywords() {
         let text = "and class else false for fun if nil or return super this true var while";
         let expected = vec![
-            Token::new(TokenKind::And, "and", 1),
-            Token::new(TokenKind::Class, "class", 1),
-            Token::new(TokenKind::Else, "else", 1),
-            Token::new(TokenKind::False, "false", 1),
-            Token::new(TokenKind::For, "for", 1),
-            Token::new(TokenKind::Fun, "fun", 1),
-            Token::new(TokenKind::If, "if", 1),
-            Token::new(TokenKind::Nil, "nil", 1),
-            Token::new(TokenKind::Or, "or", 1),
-            Token::new(TokenKind::Return, "return", 1),
-            Token::new(TokenKind::Super, "super", 1),
-            Token::new(TokenKind::This, "this", 1),
-            Token::new(TokenKind::True, "true", 1),
-            Token::new(TokenKind::Var, "var", 1),
-            Token::new(TokenKind::While, "while", 1),
-            Token::new(TokenKind::EOF, "", 1),
+            Token::new(TokenKind::And, 0, 3, 1),
+            Token::new(TokenKind::Class, 4, 9, 1),
+            Token::new(TokenKind::Else, 10, 14, 1),
+            Token::new(TokenKind::False, 15, 20, 1),
+            Token::new(TokenKind::For, 21, 24, 1),
+            Token::new(TokenKind::Fun, 25, 28, 1),
+            Token::new(TokenKind::If, 29, 31, 1),
+            Token::new(TokenKind::Nil, 32, 35, 1),
+            Token::new(TokenKind::Or, 36, 38, 1),
+            Token::new(TokenKind::Return, 39, 45, 1),
+            Token::new(TokenKind::Super, 46, 51, 1),
+            Token::new(TokenKind::This, 52, 56, 1),
+            Token::new(TokenKind::True, 57, 61, 1),
+            Token::new(TokenKind::Var, 62, 65, 1),
+            Token::new(TokenKind::While, 66, 71, 1),
+            Token::new(TokenKind::EOF, 71, 71, 1),
         ];
 
         let mut scanner = Scanner::new(text);
@@ -402,8 +407,8 @@ mod test {
     fn numbers() {
         let text = "123";
         let expected = vec![
-            Token::new(TokenKind::Number(EthNum(123f64)), text, 1),
-            Token::new(TokenKind::EOF, "", 1),
+            Token::new(TokenKind::Number(EthNum(123f64)), 0, 3, 1),
+            Token::new(TokenKind::EOF, 3, 3, 1),
         ];
 
         let mut scanner = Scanner::new(text);
@@ -411,8 +416,8 @@ mod test {
 
         let text = "123.456";
         let expected = vec![
-            Token::new(TokenKind::Number(EthNum(123.456f64)), text, 1),
-            Token::new(TokenKind::EOF, "", 1),
+            Token::new(TokenKind::Number(EthNum(123.456f64)), 0, 7, 1),
+            Token::new(TokenKind::EOF, 7, 7, 1),
         ];
 
         let mut scanner = Scanner::new(text);
@@ -420,9 +425,9 @@ mod test {
 
         let text = ".456";
         let expected = vec![
-            Token::new(TokenKind::Dot, ".", 1),
-            Token::new(TokenKind::Number(EthNum(456f64)), "456", 1),
-            Token::new(TokenKind::EOF, "", 1),
+            Token::new(TokenKind::Dot, 0, 1, 1),
+            Token::new(TokenKind::Number(EthNum(456f64)), 1, 4, 1),
+            Token::new(TokenKind::EOF, 4, 4, 1),
         ];
 
         let mut scanner = Scanner::new(text);
@@ -430,9 +435,9 @@ mod test {
 
         let text = "123.";
         let expected = vec![
-            Token::new(TokenKind::Number(EthNum(123f64)), "123", 1),
-            Token::new(TokenKind::Dot, ".", 1),
-            Token::new(TokenKind::EOF, "", 1),
+            Token::new(TokenKind::Number(EthNum(123f64)), 0, 3, 1),
+            Token::new(TokenKind::Dot, 3, 4, 1),
+            Token::new(TokenKind::EOF, 4, 4, 1),
         ];
 
         let mut scanner = Scanner::new(text);
@@ -443,25 +448,25 @@ mod test {
     fn punctuators() {
         let text = "(){};,+-*!===<=>=!=<>/.";
         let expected = vec![
-            Token::new(TokenKind::LeftParen, "(", 1),
-            Token::new(TokenKind::RightParen, ")", 1),
-            Token::new(TokenKind::LeftBrace, "{", 1),
-            Token::new(TokenKind::RightBrace, "}", 1),
-            Token::new(TokenKind::Semicolon, ";", 1),
-            Token::new(TokenKind::Comma, ",", 1),
-            Token::new(TokenKind::Plus, "+", 1),
-            Token::new(TokenKind::Minus, "-", 1),
-            Token::new(TokenKind::Star, "*", 1),
-            Token::new(TokenKind::BangEqual, "!=", 1),
-            Token::new(TokenKind::EqualEqual, "==", 1),
-            Token::new(TokenKind::LessEqual, "<=", 1),
-            Token::new(TokenKind::GreaterEqual, ">=", 1),
-            Token::new(TokenKind::BangEqual, "!=", 1),
-            Token::new(TokenKind::Less, "<", 1),
-            Token::new(TokenKind::Greater, ">", 1),
-            Token::new(TokenKind::Slash, "/", 1),
-            Token::new(TokenKind::Dot, ".", 1),
-            Token::new(TokenKind::EOF, "", 1),
+            Token::new(TokenKind::LeftParen, 0, 1, 1),
+            Token::new(TokenKind::RightParen, 1, 2, 1),
+            Token::new(TokenKind::LeftBrace, 2, 3, 1),
+            Token::new(TokenKind::RightBrace, 3, 4, 1),
+            Token::new(TokenKind::Semicolon, 4, 5, 1),
+            Token::new(TokenKind::Comma, 5, 6, 1),
+            Token::new(TokenKind::Plus, 6, 7, 1),
+            Token::new(TokenKind::Minus, 7, 8, 1),
+            Token::new(TokenKind::Star, 8, 9, 1),
+            Token::new(TokenKind::BangEqual, 9, 11, 1),
+            Token::new(TokenKind::EqualEqual, 11, 13, 1),
+            Token::new(TokenKind::LessEqual, 13, 15, 1),
+            Token::new(TokenKind::GreaterEqual, 15, 17, 1),
+            Token::new(TokenKind::BangEqual, 17, 19, 1),
+            Token::new(TokenKind::Less, 19, 20, 1),
+            Token::new(TokenKind::Greater, 20, 21, 1),
+            Token::new(TokenKind::Slash, 21, 22, 1),
+            Token::new(TokenKind::Dot, 22, 23, 1),
+            Token::new(TokenKind::EOF, 23, 23, 1),
         ];
 
         let mut scanner = Scanner::new(text);
@@ -475,10 +480,10 @@ mod test {
         
         ";
         let expected = vec![
-            Token::new(TokenKind::Identifier, "space", 1),
-            Token::new(TokenKind::Identifier, "tabs", 1),
-            Token::new(TokenKind::Identifier, "newlines", 1),
-            Token::new(TokenKind::EOF, "", 4),
+            Token::new(TokenKind::Identifier, 0, 5, 1),
+            Token::new(TokenKind::Identifier, 9, 13, 1),
+            Token::new(TokenKind::Identifier, 17, 25, 1),
+            Token::new(TokenKind::EOF, 52, 52, 4),
         ];
 
         let mut scanner = Scanner::new(text);
