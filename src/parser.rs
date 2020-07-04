@@ -4,7 +4,7 @@ use crate::scanner::{Token, TokenKind};
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Literal(Token),
     Group(Box<Expr>),
@@ -12,20 +12,20 @@ pub enum Expr {
     Unary(Unary),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Unary {
     pub operator: Token,
     pub right: Box<Expr>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Binary {
     left: Box<Expr>,
     operator: Operator,
     right: Box<Expr>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Operator(Token);
 
 #[derive(Debug)]
@@ -61,7 +61,7 @@ impl<'a> Parser<'a> {
         let mut expr = self.comparison();
 
         while self.match_kind(&[TokenKind::BangEqual, TokenKind::EqualEqual]) {
-            let operator = self.previous()?;
+            let operator = self.previous();
             let right = self.comparison()?;
             expr = Ok(Expr::Binary(Binary {
                 left: Box::new(expr?),
@@ -82,7 +82,7 @@ impl<'a> Parser<'a> {
             TokenKind::Less,
             TokenKind::LessEqual,
         ]) {
-            let operator = self.previous()?;
+            let operator = self.previous();
             let right = self.addition()?;
             expr = Ok(Expr::Binary(Binary {
                 left: Box::new(expr?),
@@ -98,7 +98,7 @@ impl<'a> Parser<'a> {
         let mut expr = self.multiplication();
 
         while self.match_kind(&[TokenKind::Minus, TokenKind::Plus]) {
-            let operator = self.previous()?;
+            let operator = self.previous();
             let right = self.multiplication()?;
             expr = Ok(Expr::Binary(Binary {
                 left: Box::new(expr?),
@@ -114,7 +114,7 @@ impl<'a> Parser<'a> {
         let mut expr = self.unary();
 
         while self.match_kind(&[TokenKind::Slash, TokenKind::Star]) {
-            let operator = self.previous()?;
+            let operator = self.previous();
             let right = self.unary()?;
             expr = Ok(Expr::Binary(Binary {
                 left: Box::new(expr?),
@@ -128,7 +128,7 @@ impl<'a> Parser<'a> {
 
     fn unary(&self) -> Result<Expr, ParseError> {
         if self.match_kind(&[TokenKind::Bang, TokenKind::Minus]) {
-            let operator_token = self.previous()?;
+            let operator_token = self.previous();
             let right = self.unary()?;
             return Ok(Expr::Unary(Unary {
                 operator: operator_token.clone(),
@@ -140,43 +140,36 @@ impl<'a> Parser<'a> {
     }
 
     fn primary(&self) -> Result<Expr, ParseError> {
-        match self.peek().ok_or(ParseError::EOF)?.kind {
-            TokenKind::False
-            | TokenKind::True
-            | TokenKind::Nil
-            | TokenKind::Number(_)
-            | TokenKind::Str(_) => Ok(Expr::Literal(self.previous()?.clone())),
-            TokenKind::LeftParen => {
-                let expr = self.expression()?;
-                self.consume(&TokenKind::RightParen, "Expected ')' after expression")?;
-                Ok(Expr::Group(Box::new(expr)))
-            }
-            _ => Err(ParseError::Unknown),
+        if self.peek()?.kind.is_primary() {
+            // call advance to increment the cursor and return the previous token
+            Ok(Expr::Literal(self.advance().clone()))
+        } else if self.match_kind(&[TokenKind::LeftParen]) {
+            let expr = self.expression()?;
+            self.consume(&TokenKind::RightParen, "Expected ')' after expression")?;
+            Ok(Expr::Group(Box::new(expr)))
+        } else {
+            Err(ParseError::Unknown)
         }
     }
 
     fn match_kind(&self, kinds: &[TokenKind]) -> bool {
-        for kind in kinds {
-            if self.check(kind) {
-                if self.advance().is_err() {
-                    return false;
-                } else {
-                    return true;
-                }
-            }
+        let result = kinds.iter().any(|tok| self.check(tok));
+
+        if result {
+            self.advance();
         }
 
-        false
+        result
     }
 
     fn consume(&self, kind: &TokenKind, message: &str) -> Result<&Token, ParseError> {
         if self.check(kind) {
-            return self.advance();
+            return Ok(self.advance());
         }
 
-        match self.peek().ok_or(ParseError::EOF)? {
+        match &self.peek()?.kind {
             val => {
-                if val.kind == TokenKind::EOF {
+                if *val == TokenKind::EOF {
                     Err(ParseError::EOF)
                 } else {
                     Err(ParseError::UserError(format!("at {}", message)))
@@ -186,18 +179,18 @@ impl<'a> Parser<'a> {
     }
 
     fn synchronize(&self) -> Result<(), ParseError> {
-        self.advance()?;
+        self.advance();
 
         loop {
             if self.is_at_end() {
                 return Err(ParseError::EOF);
             }
 
-            if self.previous()?.kind == TokenKind::Semicolon {
+            if self.previous().kind == TokenKind::Semicolon {
                 return Ok(());
             }
 
-            match self.peek().ok_or(ParseError::EOF)?.kind {
+            match self.peek()?.kind {
                 TokenKind::Class
                 | TokenKind::Fun
                 | TokenKind::Var
@@ -206,7 +199,7 @@ impl<'a> Parser<'a> {
                 | TokenKind::While
                 | TokenKind::Print
                 | TokenKind::Return => return Ok(()),
-                _ => self.advance()?,
+                _ => self.advance(),
             };
         }
     }
@@ -219,8 +212,9 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn advance(&self) -> Result<&Token, ParseError> {
+    fn advance(&self) -> &Token {
         if !self.is_at_end() {
+            // safety: Relaxed ordering is fine since we are currently a single threaded parser.
             self.current.fetch_add(1, Ordering::Relaxed);
         }
 
@@ -233,14 +227,61 @@ impl<'a> Parser<'a> {
             .unwrap_or(false)
     }
 
-    fn peek(&self) -> Option<&Token> {
-        self.tokens.get(self.current.load(Ordering::Relaxed))
+    fn peek(&self) -> Result<&Token, ParseError> {
+        self.tokens
+            .get(self.current.load(Ordering::Relaxed))
+            .ok_or(ParseError::EOF)
     }
 
-    fn previous(&self) -> Result<&Token, ParseError> {
+    fn previous(&self) -> &Token {
+        debug_assert!(self.current.load(Ordering::Relaxed) > 0);
+
         self.tokens
-            .get(self.current.fetch_sub(1, Ordering::Relaxed))
-            .ok_or(ParseError::EOF)
+            .get(self.current.load(Ordering::Relaxed) - 1)
+            .expect("This should be infallibe")
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn it_works() {
+        let input = "1 + 5";
+        let mut scanner = crate::Scanner::new(input);
+        let parser = Parser::new(scanner.scan_tokens());
+
+        let result = parser.expression();
+
+        assert_eq!(result.is_ok(), true);
+
+        if let Expr::Binary(bin) = result.unwrap() {
+            match *bin.left {
+                Expr::Literal(val) => {
+                    match val.kind {
+                        TokenKind::Number(num) => assert_eq!(num.0, 1f64),
+                        _ => panic!("Binary expression left was not a number"),
+                    };
+                }
+                _ => panic!("Parsed binary expression did not contain a literal"),
+            };
+
+            assert_eq!(bin.operator.0.kind, TokenKind::Plus);
+
+            match *bin.right {
+                Expr::Literal(val) => {
+                    match val.kind {
+                        TokenKind::Number(num) => assert_eq!(num.0, 5f64),
+                        _ => panic!("RHS of binary expression is wrong"),
+                    };
+                }
+                _ => panic!("Parsed expression is wrong"),
+            }
+        } else {
+            panic!("Parsed expression was not a Binary expression")
+        }
     }
 }
 

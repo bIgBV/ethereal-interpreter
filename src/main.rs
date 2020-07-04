@@ -44,7 +44,7 @@ fn run_prompt() {
 fn run<T: AsRef<str>>(path: T) {
     dbg!(path.as_ref());
     let mut scanner = Scanner::new(path.as_ref());
-    let mut parser = Parser::new(scanner.scan_tokens());
+    let parser = Parser::new(scanner.scan_tokens());
 
     println!("{:#?}", parser.expression());
 }

@@ -77,6 +77,33 @@ pub enum TokenKind {
     EOF,
 }
 
+impl TokenKind {
+    pub fn is_number(&self) -> bool {
+        match *self {
+            TokenKind::Number(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_str(&self) -> bool {
+        match *self {
+            TokenKind::Str(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_primary(&self) -> bool {
+        match *self {
+            TokenKind::False
+            | TokenKind::True
+            | TokenKind::Nil
+            | TokenKind::Number(_)
+            | TokenKind::Str(_) => true,
+            _ => false,
+        }
+    }
+}
+
 #[derive(Clone, Eq, PartialEq, Hash, Ord, PartialOrd, Debug)]
 pub struct EthString(String);
 
@@ -324,7 +351,6 @@ impl<'a> Scanner<'a> {
             left = self.start;
             right = self.current;
         }
-        let text = self.source.get(left..right).expect("Unable to get substr");
         self.tokens.push(Token::new(kind, left, right, self.line))
     }
 }
