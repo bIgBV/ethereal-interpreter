@@ -4,25 +4,14 @@ use std::{
 };
 
 pub mod error;
+pub mod parser;
 pub mod scanner;
-pub mod visitor;
 
+use parser::Parser;
 use scanner::Scanner;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-
-    let expr = visitor::Expr::Unary(visitor::Unary {
-        operator: scanner::Token::new(scanner::TokenKind::Plus, 0, 1, 1),
-        right: Box::new(visitor::Expr::Literal(scanner::Token::new(
-            scanner::TokenKind::Number(scanner::EthNum(12f64)),
-            1,
-            3,
-            1,
-        ))),
-    });
-
-    println!("{:?}", expr);
 
     if dbg!(dbg!(args.len()) > 1) {
         println!("Usage: jlox [script]");
@@ -55,8 +44,7 @@ fn run_prompt() {
 fn run<T: AsRef<str>>(path: T) {
     dbg!(path.as_ref());
     let mut scanner = Scanner::new(path.as_ref());
+    let mut parser = Parser::new(scanner.scan_tokens());
 
-    for token in scanner.scan_tokens() {
-        println!("{:?}", token);
-    }
+    println!("{:#?}", parser.expression());
 }

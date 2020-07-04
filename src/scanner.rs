@@ -85,7 +85,7 @@ pub struct EthNum(pub f64);
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Token {
-    kind: TokenKind,
+    pub kind: TokenKind,
     range: (usize, usize),
     line: usize,
 }

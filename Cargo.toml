@@ -1,5 +1,5 @@
 [package]
-authors = [ "bIgBV <bhargav.voleti93@gmail.com>" ]
+authors = ["bIgBV <bhargav.voleti93@gmail.com>"]
 edition = "2018"
 name    = "ethereal-interpreter"
 version = "0.1.0"
@@ -8,6 +8,7 @@ version = "0.1.0"
 
 [dependencies]
 once_cell = "0.1.8"
+thiserror = "1.0.20"
 
 [dev-dependencies]
 pretty_assertions = "0.6.1"
