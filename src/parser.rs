@@ -35,14 +35,14 @@ pub struct Parser<'a> {
 }
 
 #[derive(Debug, Error)]
-pub enum ParseError {
+pub enum ParseError<'a> {
     #[error("Reached end of file")]
     EOF,
     #[error("Unknown error occurred")]
     Unknown,
 
-    #[error("{0}")]
-    UserError(String),
+    #[error("Error occurred at{token} , {message}")]
+    UserError { token: &'a Token, message: String },
 }
 
 impl<'a> Parser<'a> {
@@ -140,6 +140,8 @@ impl<'a> Parser<'a> {
     }
 
     fn primary(&self) -> Result<Expr, ParseError> {
+        // Kind of an ad-hoc `match_kind` as we need to flip the match becasue Number and Str
+        // variants contain values.
         if self.peek()?.kind.is_primary() {
             // call advance to increment the cursor and return the previous token
             Ok(Expr::Literal(self.advance().clone()))
@@ -148,7 +150,10 @@ impl<'a> Parser<'a> {
             self.consume(&TokenKind::RightParen, "Expected ')' after expression")?;
             Ok(Expr::Group(Box::new(expr)))
         } else {
-            Err(ParseError::Unknown)
+            Err(ParseError::UserError {
+                token: self.peek()?,
+                message: String::from("Expected expression"),
+            })
         }
     }
 
@@ -167,12 +172,16 @@ impl<'a> Parser<'a> {
             return Ok(self.advance());
         }
 
-        match &self.peek()?.kind {
+        let token = self.peek()?;
+        match &token.kind {
             val => {
                 if *val == TokenKind::EOF {
                     Err(ParseError::EOF)
                 } else {
-                    Err(ParseError::UserError(format!("at {}", message)))
+                    Err(ParseError::UserError {
+                        token: token,
+                        message: message.to_owned(),
+                    })
                 }
             }
         }

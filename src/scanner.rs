@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::RwLock};
+use std::{collections::HashMap, fmt, sync::RwLock};
 
 use once_cell::{sync::Lazy, sync_lazy};
 
@@ -107,8 +107,20 @@ impl TokenKind {
 #[derive(Clone, Eq, PartialEq, Hash, Ord, PartialOrd, Debug)]
 pub struct EthString(String);
 
+impl fmt::Display for EthString {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 #[derive(Clone, PartialEq, PartialOrd, Debug)]
 pub struct EthNum(pub f64);
+
+impl fmt::Display for EthNum {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Token {
@@ -123,6 +135,53 @@ impl Token {
             kind,
             line,
             range: (start, end),
+        }
+    }
+}
+
+impl fmt::Display for Token {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "line {}", self.line)?;
+        match &self.kind {
+            TokenKind::LeftParen => write!(f, " '('"),
+            TokenKind::RightParen => write!(f, " ')'"),
+            TokenKind::LeftBrace => write!(f, " '{{'"),
+            TokenKind::RightBrace => write!(f, " '}}'"),
+            TokenKind::Comma => write!(f, " ','"),
+            TokenKind::Dot => write!(f, " '.'"),
+            TokenKind::Minus => write!(f, " '-'"),
+            TokenKind::Plus => write!(f, " '+'"),
+            TokenKind::Semicolon => write!(f, " ';'"),
+            TokenKind::Slash => write!(f, " '/'"),
+            TokenKind::Star => write!(f, " '*'"),
+            TokenKind::Bang => write!(f, " '!'"),
+            TokenKind::BangEqual => write!(f, " '!='"),
+            TokenKind::Equal => write!(f, " '='"),
+            TokenKind::EqualEqual => write!(f, " '=='"),
+            TokenKind::Greater => write!(f, " '>'"),
+            TokenKind::GreaterEqual => write!(f, " '>="),
+            TokenKind::Less => write!(f, " '<'"),
+            TokenKind::LessEqual => write!(f, " '<="),
+            TokenKind::Identifier => write!(f, " ident"),
+            TokenKind::Str(v) => write!(f, " '{}'", v),
+            TokenKind::Number(v) => write!(f, " '{}'", v),
+            TokenKind::And => write!(f, " '&&'"),
+            TokenKind::Class => write!(f, " 'class'"),
+            TokenKind::Else => write!(f, " 'else'"),
+            TokenKind::False => write!(f, " 'false'"),
+            TokenKind::Fun => write!(f, " 'fun'"),
+            TokenKind::For => write!(f, " 'for'"),
+            TokenKind::If => write!(f, " 'if'"),
+            TokenKind::Nil => write!(f, " 'nil'"),
+            TokenKind::Or => write!(f, " 'or'"),
+            TokenKind::Print => write!(f, " 'print'"),
+            TokenKind::Return => write!(f, " 'return'"),
+            TokenKind::Super => write!(f, " 'super'"),
+            TokenKind::This => write!(f, " 'this'"),
+            TokenKind::True => write!(f, " 'true'"),
+            TokenKind::Var => write!(f, " 'var'"),
+            TokenKind::While => write!(f, " 'while'"),
+            TokenKind::EOF => write!(f, " 'EOF'"),
         }
     }
 }

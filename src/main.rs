@@ -5,6 +5,7 @@ use std::{
 
 pub mod error;
 pub mod parser;
+pub mod printer;
 pub mod scanner;
 
 use parser::Parser;
@@ -46,5 +47,8 @@ fn run<T: AsRef<str>>(path: T) {
     let mut scanner = Scanner::new(path.as_ref());
     let parser = Parser::new(scanner.scan_tokens());
 
-    println!("{:#?}", parser.expression());
+    match parser.expression() {
+        Ok(expr) => println!("{:#?}", expr),
+        Err(e) => println!("Error: {}", e),
+    }
 }
