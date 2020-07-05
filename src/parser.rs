@@ -173,17 +173,13 @@ impl<'a> Parser<'a> {
         }
 
         let token = self.peek()?;
-        match &token.kind {
-            val => {
-                if *val == TokenKind::EOF {
-                    Err(ParseError::EOF)
-                } else {
-                    Err(ParseError::UserError {
-                        token: token,
-                        message: message.to_owned(),
-                    })
-                }
-            }
+        if let TokenKind::EOF = token.kind {
+            Err(ParseError::EOF)
+        } else {
+            Err(ParseError::UserError {
+                token,
+                message: message.to_owned(),
+            })
         }
     }
 
