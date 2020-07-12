@@ -9,6 +9,7 @@ pub mod printer;
 pub mod scanner;
 
 use parser::Parser;
+use printer::Printer;
 use scanner::Scanner;
 
 fn main() {
@@ -46,9 +47,10 @@ fn run<T: AsRef<str>>(path: T) {
     dbg!(path.as_ref());
     let mut scanner = Scanner::new(path.as_ref());
     let parser = Parser::new(scanner.scan_tokens());
+    let mut printer = Printer::new();
 
     match parser.expression() {
-        Ok(expr) => println!("{:#?}", expr),
+        Ok(expr) => println!("{}", printer.print(&expr)),
         Err(e) => println!("Error: {}", e),
     }
 }

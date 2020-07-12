@@ -20,13 +20,13 @@ pub struct Unary {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Binary {
-    left: Box<Expr>,
-    operator: Operator,
-    right: Box<Expr>,
+    pub left: Box<Expr>,
+    pub operator: Operator,
+    pub right: Box<Expr>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Operator(Token);
+pub struct Operator(pub Token);
 
 #[derive(Debug)]
 pub struct Parser<'a> {
@@ -290,9 +290,11 @@ mod test {
     }
 }
 
-pub trait Visitor<T> {
-    fn visit_binary(&self, expr: &Expr) -> T;
-    fn visit_literal(&self, expr: &Expr) -> T;
-    fn visit_unary(&self, expr: &Expr) -> T;
-    fn visit_group(&self, expr: &Expr) -> T;
+pub trait Visitor {
+    type Out;
+
+    fn visit_binary(&mut self, expr: &Expr) -> Self::Out;
+    fn visit_literal(&mut self, expr: &Expr) -> Self::Out;
+    fn visit_unary(&mut self, expr: &Expr) -> Self::Out;
+    fn visit_group(&mut self, expr: &Expr) -> Self::Out;
 }

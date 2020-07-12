@@ -141,7 +141,7 @@ impl Token {
 
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "line {}", self.line)?;
+        // write!(f, "line {}", self.line)?;
         match &self.kind {
             TokenKind::LeftParen => write!(f, " '('"),
             TokenKind::RightParen => write!(f, " ')'"),
