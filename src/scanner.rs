@@ -102,10 +102,24 @@ impl TokenKind {
             _ => false,
         }
     }
+
+    pub fn is_literal(&self) -> bool {
+        match *self {
+            TokenKind::Number(_) | TokenKind::Str(_) | TokenKind::False | TokenKind::True => true,
+            _ => false,
+        }
+    }
+}
+
+pub fn is_truthy(kind: &TokenKind) -> bool {
+    match *kind {
+        TokenKind::Nil | TokenKind::False => false,
+        _ => true,
+    }
 }
 
 #[derive(Clone, Eq, PartialEq, Hash, Ord, PartialOrd, Debug)]
-pub struct EthString(String);
+pub struct EthString(pub String);
 
 impl fmt::Display for EthString {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

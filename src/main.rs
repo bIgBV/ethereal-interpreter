@@ -4,12 +4,13 @@ use std::{
 };
 
 pub mod error;
+mod interpreter;
 pub mod parser;
 pub mod printer;
 pub mod scanner;
 
+use interpreter::Interpreter;
 use parser::Parser;
-use printer::Printer;
 use scanner::Scanner;
 
 fn main() {
@@ -38,19 +39,24 @@ fn run_prompt() {
         reader
             .read_line(&mut buffer)
             .expect("Unable to read to string");
-        run(&buffer);
+        match run(&buffer) {
+            Ok(_) => (),
+            Err(e) => println!("{}", e),
+        };
         buffer.clear();
     }
 }
 
-fn run<T: AsRef<str>>(path: T) {
+fn run<T: AsRef<str>>(path: T) -> Result<(), Box<dyn std::error::Error>> {
     dbg!(path.as_ref());
     let mut scanner = Scanner::new(path.as_ref());
     let parser = Parser::new(scanner.scan_tokens());
-    let mut printer = Printer::new();
+    let mut interpreter = Interpreter;
 
     match parser.expression() {
-        Ok(expr) => println!("{}", printer.print(&expr)),
+        Ok(expr) => println!("{}", interpreter.interpret(&expr)?),
         Err(e) => println!("Error: {}", e),
     }
+
+    Ok(())
 }
