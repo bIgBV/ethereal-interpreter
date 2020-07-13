@@ -1,23 +1,18 @@
-use crate::parser::{Expr, Visitor};
+use crate::common::{Expr, Visitor};
 
 #[derive(Debug)]
-pub struct Printer {
-    buf: String,
-}
+pub struct Printer {}
 
 impl Printer {
-    pub fn new() -> Self {
-        Self { buf: String::new() }
+    pub fn print(&self, expr: &Expr) -> String {
+        self.visit_expr(expr)
     }
+}
 
-    pub fn print(&mut self, expr: &Expr) -> String {
-        self.expr(expr);
-        let ret = self.buf.clone();
-        self.buf.clear();
-        ret
-    }
+impl Visitor for Printer {
+    type Out = String;
 
-    fn expr(&mut self, expr: &Expr) {
+    fn visit_expr(&self, expr: &Expr) -> Self::Out {
         match expr {
             Expr::Literal(_) => self.visit_literal(expr),
             Expr::Binary(_) => self.visit_binary(expr),
@@ -25,41 +20,41 @@ impl Printer {
             Expr::Group(_) => self.visit_group(expr),
         }
     }
-}
 
-impl Visitor for Printer {
-    type Out = ();
-
-    fn visit_binary(&mut self, expr: &Expr) -> Self::Out {
+    fn visit_binary(&self, expr: &Expr) -> Self::Out {
         if let Expr::Binary(e) = expr {
-            self.buf.push_str(" binary ");
-            self.expr(&e.left);
+            let left = self.visit_expr(&e.left);
             let operator = format!("{}", e.operator.0);
-            self.buf.push_str(operator.as_str());
-            self.expr(&e.right)
+            let right = self.visit_expr(&e.right);
+            format!(" ({} {} {})", left, operator, right)
+        } else {
+            format!("")
         }
     }
 
-    fn visit_literal(&mut self, expr: &Expr) -> Self::Out {
+    fn visit_literal(&self, expr: &Expr) -> Self::Out {
         if let Expr::Literal(tok) = expr {
-            let out = format!(" lit {}", tok);
-            self.buf.push_str(out.as_str());
+            format!(" {}", tok)
+        } else {
+            format!("")
         }
     }
 
-    fn visit_unary(&mut self, expr: &Expr) -> Self::Out {
+    fn visit_unary(&self, expr: &Expr) -> Self::Out {
         if let Expr::Unary(e) = expr {
-            let out = format!(" unary {}", e.operator);
-            self.buf.push_str(out.as_str());
-            self.expr(&e.right);
+            let right = self.visit_expr(&e.right);
+            format!(" {}{}", e.operator, right)
+        } else {
+            format!("")
         }
     }
 
-    fn visit_group(&mut self, expr: &Expr) -> Self::Out {
+    fn visit_group(&self, expr: &Expr) -> Self::Out {
         if let Expr::Group(e) = expr {
-            self.buf.push_str(" ( ");
-            self.expr(e);
-            self.buf.push_str(" ) ");
+            let e = self.visit_expr(e);
+            format!("( {} )", e)
+        } else {
+            format!("")
         }
     }
 }

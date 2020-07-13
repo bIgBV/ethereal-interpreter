@@ -1,38 +1,8 @@
 use thiserror::Error;
 
-use crate::scanner::{Token, TokenKind};
+use crate::common::{Binary, Expr, Operator, Token, TokenKind, Unary};
 
 use std::sync::atomic::{AtomicUsize, Ordering};
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Expr {
-    Literal(Token),
-    Group(Box<Expr>),
-    Binary(Binary),
-    Unary(Unary),
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Unary {
-    pub operator: Token,
-    pub right: Box<Expr>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Binary {
-    pub left: Box<Expr>,
-    pub operator: Operator,
-    pub right: Box<Expr>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Operator(pub Token);
-
-#[derive(Debug)]
-pub struct Parser<'a> {
-    tokens: &'a [Token],
-    current: AtomicUsize,
-}
 
 #[derive(Debug, Error)]
 pub enum ParseError<'a> {
@@ -43,6 +13,12 @@ pub enum ParseError<'a> {
 
     #[error("Error occurred at{token} , {message}")]
     UserError { token: &'a Token, message: String },
+}
+
+#[derive(Debug)]
+pub struct Parser<'a> {
+    tokens: &'a [Token],
+    current: AtomicUsize,
 }
 
 impl<'a> Parser<'a> {
@@ -288,13 +264,4 @@ mod test {
             panic!("Parsed expression was not a Binary expression")
         }
     }
-}
-
-pub trait Visitor {
-    type Out;
-
-    fn visit_binary(&mut self, expr: &Expr) -> Self::Out;
-    fn visit_literal(&mut self, expr: &Expr) -> Self::Out;
-    fn visit_unary(&mut self, expr: &Expr) -> Self::Out;
-    fn visit_group(&mut self, expr: &Expr) -> Self::Out;
 }

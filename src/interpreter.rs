@@ -1,7 +1,4 @@
-use crate::{
-    parser::{Expr, Visitor},
-    scanner::{EthNum, EthString, Token, TokenKind},
-};
+use crate::common::{EthNum, EthString, Expr, Token, TokenKind, Visitor};
 
 use std::{
     cmp::{Ordering, PartialEq, PartialOrd},
@@ -153,7 +150,7 @@ impl TryFrom<&Token> for Value {
 
     fn try_from(value: &Token) -> Result<Self, Self::Error> {
         if value.kind.is_literal() {
-            return match &value.kind {
+            match &value.kind {
                 // fuck it, let's just clone things.
                 TokenKind::Number(num) => Ok(Value::Num(num.clone())),
                 TokenKind::Str(string) => Ok(Value::Str(string.clone())),
@@ -163,23 +160,27 @@ impl TryFrom<&Token> for Value {
                 _ => Err(InterpreterError::Argument {
                     literal: format!("{}", value),
                 }),
-            };
+            }
+        } else {
+            Err(InterpreterError::Argument {
+                literal: format!("{}", value),
+            })
         }
-
-        Err(InterpreterError::Argument {
-            literal: format!("{}", value),
-        })
     }
 }
 
 pub struct Interpreter;
 
 impl Interpreter {
-    pub fn interpret(&mut self, expr: &Expr) -> Result<Value, InterpreterError> {
+    pub fn interpret(&self, expr: &Expr) -> Result<Value, InterpreterError> {
         self.visit_expr(expr)
     }
+}
 
-    fn visit_expr(&mut self, expr: &Expr) -> Result<Value, InterpreterError> {
+impl Visitor for Interpreter {
+    type Out = Result<Value, InterpreterError>;
+
+    fn visit_expr(&self, expr: &Expr) -> Result<Value, InterpreterError> {
         match expr {
             Expr::Literal(_) => self.visit_literal(expr),
             Expr::Binary(_) => self.visit_binary(expr),
@@ -187,12 +188,8 @@ impl Interpreter {
             Expr::Unary(_) => self.visit_unary(expr),
         }
     }
-}
 
-impl Visitor for Interpreter {
-    type Out = Result<Value, InterpreterError>;
-
-    fn visit_binary(&mut self, expr: &Expr) -> Self::Out {
+    fn visit_binary(&self, expr: &Expr) -> Self::Out {
         if let Expr::Binary(bin) = expr {
             let left = self.visit_expr(&bin.left)?;
             let right = self.visit_expr(&bin.right)?;
@@ -219,7 +216,7 @@ impl Visitor for Interpreter {
         }
     }
 
-    fn visit_literal(&mut self, expr: &Expr) -> Self::Out {
+    fn visit_literal(&self, expr: &Expr) -> Self::Out {
         if let Expr::Literal(e) = expr {
             e.try_into()
         } else {
@@ -229,7 +226,7 @@ impl Visitor for Interpreter {
         }
     }
 
-    fn visit_unary(&mut self, expr: &Expr) -> Self::Out {
+    fn visit_unary(&self, expr: &Expr) -> Self::Out {
         if let Expr::Unary(e) = expr {
             let literal = self.visit_literal(&e.right)?;
             match e.operator.kind {
@@ -246,7 +243,7 @@ impl Visitor for Interpreter {
         }
     }
 
-    fn visit_group(&mut self, expr: &Expr) -> Self::Out {
+    fn visit_group(&self, expr: &Expr) -> Self::Out {
         if let Expr::Group(e) = expr {
             self.visit_expr(e)
         } else {

@@ -3,11 +3,12 @@ use std::{
     io::{self, stdin, BufRead, Write},
 };
 
-pub mod error;
+mod common;
+mod error;
 mod interpreter;
-pub mod parser;
-pub mod printer;
-pub mod scanner;
+mod parser;
+mod printer;
+mod scanner;
 
 use interpreter::Interpreter;
 use parser::Parser;
@@ -19,7 +20,10 @@ fn main() {
     if dbg!(dbg!(args.len()) > 1) {
         println!("Usage: jlox [script]");
     } else if args.len() == 2 {
-        run(&args[1]);
+        match run(&args[1]) {
+            Ok(_) => (),
+            Err(e) => panic!("{}", e),
+        };
     } else {
         run_prompt();
     }
@@ -51,10 +55,14 @@ fn run<T: AsRef<str>>(path: T) -> Result<(), Box<dyn std::error::Error>> {
     dbg!(path.as_ref());
     let mut scanner = Scanner::new(path.as_ref());
     let parser = Parser::new(scanner.scan_tokens());
-    let mut interpreter = Interpreter;
+    let interpreter = Interpreter;
 
     match parser.expression() {
-        Ok(expr) => println!("{}", interpreter.interpret(&expr)?),
+        Ok(expr) => {
+            let printer = printer::Printer {};
+            println!("{}", printer.print(&expr));
+            println!("{}", interpreter.interpret(&expr)?)
+        }
         Err(e) => println!("Error: {}", e),
     }
 
