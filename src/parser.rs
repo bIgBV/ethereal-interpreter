@@ -41,21 +41,21 @@ impl<'a> Parser<'a> {
 
     fn print_statement(&self) -> Result<Stmt, ParseError> {
         let expr = self.expression()?;
-        self.consume(&TokenKind::Semicolon, "Expected ';' after expression");
-
-        Ok(Stmt::Expr(expr))
-    }
-
-    fn expresion_statement(&self) -> Result<Stmt, ParseError> {
-        let expr = self.expression()?;
-        self.consume(&TokenKind::Semicolon, "Expected ';' after expression");
+        self.consume(&TokenKind::Semicolon, "Expected ';' after expression")?;
 
         Ok(Stmt::Print(expr))
     }
 
+    fn expresion_statement(&self) -> Result<Stmt, ParseError> {
+        let expr = self.expression()?;
+        self.consume(&TokenKind::Semicolon, "Expected ';' after expression")?;
+
+        Ok(Stmt::Expr(expr))
+    }
+
     fn statement(&self) -> Result<Stmt, ParseError> {
         if self.match_kind(&[TokenKind::Print]) {
-            self.print_statement();
+            return self.print_statement();
         }
 
         self.expresion_statement()
