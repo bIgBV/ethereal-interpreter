@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::common::{Binary, Expr, Operator, Stmt, Token, TokenKind, Unary};
+use crate::common::{self, Binary, Expr, Operator, Stmt, Token, TokenKind, Unary};
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -29,14 +29,57 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse(&self) -> Result<Vec<Stmt>, ParseError> {
+    pub fn parse(&self) -> (Vec<Stmt>, Vec<ParseError>) {
         let mut stmts = vec![];
+        let mut errs = vec![];
 
         while !self.is_at_end() {
-            stmts.push(self.statement()?);
+            match self.declaration() {
+                Ok(s) => stmts.push(s),
+                Err(e) => errs.push(e),
+            }
         }
 
-        Ok(stmts)
+        (stmts, errs)
+    }
+
+    fn declaration(&self) -> Result<Stmt, ParseError> {
+        let result = {
+            if self.match_kind(&[TokenKind::Var]) {
+                self.variable_decl()
+            } else {
+                self.statement()
+            }
+        };
+
+        match result {
+            val @ Ok(s) => val,
+            Err(e) => {
+                self.synchronize();
+                Err(e)
+            }
+        }
+    }
+
+    fn variable_decl(&self) -> Result<Stmt, ParseError> {
+        let name = self.consume(&TokenKind::Identifier, "Expected a variable name.")?;
+
+        let mut initializer = None;
+
+        if self.match_kind(&[TokenKind::Equal]) {
+            initializer = Some(self.expression()?);
+        }
+
+        self.consume(
+            &TokenKind::Semicolon,
+            "Expected ';' after variable declaration.",
+        );
+
+        Ok(Stmt::Var(common::Variable {
+            name: name.clone(),
+            init: initializer
+                .unwrap_or_else(|| panic!("We should definitely have an expression at this point")),
+        }))
     }
 
     fn print_statement(&self) -> Result<Stmt, ParseError> {
@@ -153,6 +196,8 @@ impl<'a> Parser<'a> {
         if self.peek()?.kind.is_primary() {
             // call advance to increment the cursor and return the previous token
             Ok(Expr::Literal(self.advance().clone()))
+        } else if self.match_kind(&[TokenKind::Identifier]) {
+            Ok(Expr::Variable(self.previous().clone()))
         } else if self.match_kind(&[TokenKind::LeftParen]) {
             let expr = self.expression()?;
             self.consume(&TokenKind::RightParen, "Expected ')' after expression")?;

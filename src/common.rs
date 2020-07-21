@@ -24,12 +24,20 @@ pub enum Expr {
     Group(Box<Expr>),
     Binary(Binary),
     Unary(Unary),
+    Variable(Token),
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
     Expr(Expr),
     Print(Expr),
+    Var(Variable),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Variable {
+    name: Token,
+    init: Expr,
 }
 
 #[derive(Debug, Clone, PartialEq)]

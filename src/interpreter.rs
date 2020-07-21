@@ -270,7 +270,7 @@ impl StmtVisitor for Interpreter {
 
     fn visit_expr_stmt(&self, stmt: &Stmt) -> Self::Out {
         if let Stmt::Expr(e) = stmt {
-            self.visit_expr(e);
+            self.visit_expr(e)?;
         } else {
             return Err(InterpreterError::Argument {
                 literal: format!("{:?}", stmt),
