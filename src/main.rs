@@ -9,6 +9,7 @@ mod interpreter;
 mod parser;
 mod printer;
 mod scanner;
+mod statement;
 
 use interpreter::Interpreter;
 use parser::Parser;
@@ -52,17 +53,12 @@ fn run_prompt() {
 }
 
 fn run<T: AsRef<str>>(path: T) -> Result<(), Box<dyn std::error::Error>> {
-    dbg!(path.as_ref());
     let mut scanner = Scanner::new(path.as_ref());
     let parser = Parser::new(scanner.scan_tokens());
     let interpreter = Interpreter;
 
-    match parser.expression() {
-        Ok(expr) => {
-            let printer = printer::Printer {};
-            println!("{}", printer.print(&expr));
-            println!("{}", interpreter.interpret(&expr)?)
-        }
+    match parser.parse() {
+        Ok(stmts) => interpreter.interpret(&stmts)?,
         Err(e) => println!("Error: {}", e),
     }
 

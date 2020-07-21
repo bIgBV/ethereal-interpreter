@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::common::{Binary, Expr, Operator, Token, TokenKind, Unary};
+use crate::common::{Binary, Expr, Operator, Stmt, Token, TokenKind, Unary};
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -29,7 +29,39 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn expression(&self) -> Result<Expr, ParseError> {
+    pub fn parse(&self) -> Result<Vec<Stmt>, ParseError> {
+        let mut stmts = vec![];
+
+        while !self.is_at_end() {
+            stmts.push(self.statement()?);
+        }
+
+        Ok(stmts)
+    }
+
+    fn print_statement(&self) -> Result<Stmt, ParseError> {
+        let expr = self.expression()?;
+        self.consume(&TokenKind::Semicolon, "Expected ';' after expression");
+
+        Ok(Stmt::Expr(expr))
+    }
+
+    fn expresion_statement(&self) -> Result<Stmt, ParseError> {
+        let expr = self.expression()?;
+        self.consume(&TokenKind::Semicolon, "Expected ';' after expression");
+
+        Ok(Stmt::Print(expr))
+    }
+
+    fn statement(&self) -> Result<Stmt, ParseError> {
+        if self.match_kind(&[TokenKind::Print]) {
+            self.print_statement();
+        }
+
+        self.expresion_statement()
+    }
+
+    fn expression(&self) -> Result<Expr, ParseError> {
         self.equality()
     }
 

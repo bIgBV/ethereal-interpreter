@@ -1,4 +1,4 @@
-use crate::common::{Expr, Visitor};
+use crate::common::{Expr, ExprVisitor};
 
 #[derive(Debug)]
 pub struct Printer {}
@@ -9,7 +9,7 @@ impl Printer {
     }
 }
 
-impl Visitor for Printer {
+impl ExprVisitor for Printer {
     type Out = String;
 
     fn visit_expr(&self, expr: &Expr) -> Self::Out {

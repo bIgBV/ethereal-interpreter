@@ -1,4 +1,4 @@
-use crate::common::{EthNum, EthString, Expr, Token, TokenKind, Visitor};
+use crate::common::{EthNum, EthString, Expr, ExprVisitor, Stmt, StmtVisitor, Token, TokenKind};
 
 use std::{
     cmp::{Ordering, PartialEq, PartialOrd},
@@ -172,12 +172,16 @@ impl TryFrom<&Token> for Value {
 pub struct Interpreter;
 
 impl Interpreter {
-    pub fn interpret(&self, expr: &Expr) -> Result<Value, InterpreterError> {
-        self.visit_expr(expr)
+    pub fn interpret(&self, stmts: &[Stmt]) -> Result<(), InterpreterError> {
+        for stmt in stmts {
+            self.visit_stmt(stmt)?;
+        }
+
+        Ok(())
     }
 }
 
-impl Visitor for Interpreter {
+impl ExprVisitor for Interpreter {
     type Out = Result<Value, InterpreterError>;
 
     fn visit_expr(&self, expr: &Expr) -> Result<Value, InterpreterError> {
@@ -251,5 +255,41 @@ impl Visitor for Interpreter {
                 literal: format!("{:?}", expr),
             })
         }
+    }
+}
+
+impl StmtVisitor for Interpreter {
+    type Out = Result<(), InterpreterError>;
+
+    fn visit_stmt(&self, stmt: &Stmt) -> Self::Out {
+        match *stmt {
+            Stmt::Expr(_) => self.visit_expr_stmt(stmt),
+            Stmt::Print(_) => self.visit_print(stmt),
+        }
+    }
+
+    fn visit_expr_stmt(&self, stmt: &Stmt) -> Self::Out {
+        if let Stmt::Expr(e) = stmt {
+            self.visit_expr(e);
+        } else {
+            return Err(InterpreterError::Argument {
+                literal: format!("{:?}", stmt),
+            });
+        }
+
+        Ok(())
+    }
+
+    fn visit_print(&self, stmt: &Stmt) -> Self::Out {
+        if let Stmt::Print(e) = stmt {
+            let value = self.visit_expr(e)?;
+            println!("{}", value);
+        } else {
+            return Err(InterpreterError::Argument {
+                literal: format!("{:?}", stmt),
+            });
+        }
+
+        Ok(())
     }
 }

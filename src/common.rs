@@ -1,6 +1,6 @@
 use std::fmt;
 
-pub trait Visitor {
+pub trait ExprVisitor {
     type Out;
 
     fn visit_expr(&self, expr: &Expr) -> Self::Out;
@@ -10,12 +10,26 @@ pub trait Visitor {
     fn visit_group(&self, expr: &Expr) -> Self::Out;
 }
 
+pub trait StmtVisitor {
+    type Out;
+
+    fn visit_print(&self, stmt: &Stmt) -> Self::Out;
+    fn visit_expr_stmt(&self, stmt: &Stmt) -> Self::Out;
+    fn visit_stmt(&self, stmt: &Stmt) -> Self::Out;
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Literal(Token),
     Group(Box<Expr>),
     Binary(Binary),
     Unary(Unary),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Stmt {
+    Expr(Expr),
+    Print(Expr),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -103,20 +117,6 @@ pub enum TokenKind {
 }
 
 impl TokenKind {
-    pub fn is_number(&self) -> bool {
-        match *self {
-            TokenKind::Number(_) => true,
-            _ => false,
-        }
-    }
-
-    pub fn is_str(&self) -> bool {
-        match *self {
-            TokenKind::Str(_) => true,
-            _ => false,
-        }
-    }
-
     pub fn is_primary(&self) -> bool {
         match *self {
             TokenKind::False
@@ -133,13 +133,6 @@ impl TokenKind {
             TokenKind::Number(_) | TokenKind::Str(_) | TokenKind::False | TokenKind::True => true,
             _ => false,
         }
-    }
-}
-
-pub fn is_truthy(kind: &TokenKind) -> bool {
-    match *kind {
-        TokenKind::Nil | TokenKind::False => false,
-        _ => true,
     }
 }
 
