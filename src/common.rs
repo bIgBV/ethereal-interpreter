@@ -4,24 +4,24 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-pub trait ExprVisitor {
+pub trait ExprVisitor<'us, 'source: 'us> {
     type Out;
 
-    fn visit_expr(&self, expr: &Expr) -> Self::Out;
-    fn visit_binary(&self, expr: &Expr) -> Self::Out;
-    fn visit_literal(&self, expr: &Expr) -> Self::Out;
-    fn visit_unary(&self, expr: &Expr) -> Self::Out;
-    fn visit_group(&self, expr: &Expr) -> Self::Out;
-    fn visit_var(&self, expr: &Expr) -> Self::Out;
+    fn visit_expr(&'us self, expr: &'source Expr) -> Self::Out;
+    fn visit_binary(&'us self, expr: &'source Expr) -> Self::Out;
+    fn visit_literal(&'us self, expr: &'source Expr) -> Self::Out;
+    fn visit_unary(&'us self, expr: &'source Expr) -> Self::Out;
+    fn visit_group(&'us self, expr: &'source Expr) -> Self::Out;
+    fn visit_var(&'us self, expr: &'source Expr) -> Self::Out;
 }
 
-pub trait StmtVisitor {
+pub trait StmtVisitor<'us, 'source: 'us> {
     type Out;
 
-    fn visit_stmt(&self, stmt: &Stmt) -> Self::Out;
-    fn visit_print(&self, stmt: &Stmt) -> Self::Out;
-    fn visit_expr_stmt(&self, stmt: &Stmt) -> Self::Out;
-    fn visit_var_stmt(&self, stmt: &Stmt) -> Self::Out;
+    fn visit_stmt(&'us self, stmt: &'source Stmt) -> Self::Out;
+    fn visit_print(&'us self, stmt: &'source Stmt) -> Self::Out;
+    fn visit_expr_stmt(&'us self, stmt: &'source Stmt) -> Self::Out;
+    fn visit_var_stmt(&'us self, stmt: &'source Stmt) -> Self::Out;
 }
 
 #[derive(Debug, Clone, PartialEq)]

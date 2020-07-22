@@ -18,6 +18,12 @@ pub enum InterpreterError {
     // needs to be a String and not &str because we don't have GATs yet :(
     #[error("Incorrect argument provided: {literal}")]
     Argument { literal: String },
+
+    #[error(transparent)]
+    Env {
+        #[from]
+        source: Box<dyn std::error::Error>,
+    },
 }
 
 impl Add for Value {
@@ -169,7 +175,10 @@ pub struct Interpreter<'source> {
 }
 
 impl<'source> Interpreter<'source> {
-    pub fn interpret(&self, stmts: &'source [Stmt]) -> Result<(), InterpreterError> {
+    pub fn interpret<'us>(&'us self, stmts: &'source [Stmt]) -> Result<(), InterpreterError>
+    where
+        'source: 'us,
+    {
         for stmt in stmts {
             self.visit_stmt(stmt)?;
         }
@@ -178,19 +187,20 @@ impl<'source> Interpreter<'source> {
     }
 }
 
-impl<'source> ExprVisitor for Interpreter<'source> {
+impl<'us, 'source: 'us> ExprVisitor<'us, 'source> for Interpreter<'source> {
     type Out = Result<Value, InterpreterError>;
 
-    fn visit_expr(&self, expr: &Expr) -> Result<Value, InterpreterError> {
+    fn visit_expr(&self, expr: &'source Expr) -> Result<Value, InterpreterError> {
         match expr {
             Expr::Literal(_) => self.visit_literal(expr),
             Expr::Binary(_) => self.visit_binary(expr),
             Expr::Group(_) => self.visit_group(expr),
             Expr::Unary(_) => self.visit_unary(expr),
+            Expr::Variable(_) => self.visit_var(expr),
         }
     }
 
-    fn visit_binary(&self, expr: &Expr) -> Self::Out {
+    fn visit_binary(&self, expr: &'source Expr) -> Self::Out {
         if let Expr::Binary(bin) = expr {
             let left = self.visit_expr(&bin.left)?;
             let right = self.visit_expr(&bin.right)?;
@@ -217,7 +227,7 @@ impl<'source> ExprVisitor for Interpreter<'source> {
         }
     }
 
-    fn visit_literal(&self, expr: &Expr) -> Self::Out {
+    fn visit_literal(&self, expr: &'source Expr) -> Self::Out {
         if let Expr::Literal(e) = expr {
             e.try_into()
         } else {
@@ -227,7 +237,7 @@ impl<'source> ExprVisitor for Interpreter<'source> {
         }
     }
 
-    fn visit_unary(&self, expr: &Expr) -> Self::Out {
+    fn visit_unary(&self, expr: &'source Expr) -> Self::Out {
         if let Expr::Unary(e) = expr {
             let literal = self.visit_literal(&e.right)?;
             match e.operator.kind {
@@ -244,7 +254,7 @@ impl<'source> ExprVisitor for Interpreter<'source> {
         }
     }
 
-    fn visit_group(&self, expr: &Expr) -> Self::Out {
+    fn visit_group(&self, expr: &'source Expr) -> Self::Out {
         if let Expr::Group(e) = expr {
             self.visit_expr(e)
         } else {
@@ -253,9 +263,19 @@ impl<'source> ExprVisitor for Interpreter<'source> {
             })
         }
     }
+
+    fn visit_var(&self, expr: &'source Expr) -> Self::Out {
+        if let Expr::Variable(var) = expr {
+            self.env.get(token).map_err(e.into())
+        } else {
+            Err(InterpreterError::Argument {
+                literal: format!("{:?}", expr),
+            })
+        }
+    }
 }
 
-impl<'source> StmtVisitor for Interpreter<'source> {
+impl<'us, 'source: 'us> StmtVisitor<'us, 'source> for Interpreter<'source> {
     type Out = Result<(), InterpreterError>;
 
     fn visit_stmt(&self, stmt: &'source Stmt) -> Self::Out {
