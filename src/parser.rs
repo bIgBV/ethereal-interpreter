@@ -53,7 +53,7 @@ impl<'a> Parser<'a> {
         };
 
         match result {
-            val @ Ok(s) => val,
+            Ok(s) => Ok(s),
             Err(e) => {
                 self.synchronize();
                 Err(e)

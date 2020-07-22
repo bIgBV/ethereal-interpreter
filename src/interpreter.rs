@@ -1,4 +1,7 @@
-use crate::common::{EthNum, EthString, Expr, ExprVisitor, Stmt, StmtVisitor, Token, TokenKind};
+use crate::{
+    common::{EthNum, EthString, Expr, ExprVisitor, Stmt, StmtVisitor, Token, TokenKind, Value},
+    state::Environment,
+};
 
 use std::{
     cmp::{Ordering, PartialEq, PartialOrd},
@@ -117,14 +120,6 @@ impl Display for Value {
     }
 }
 
-#[derive(Debug)]
-pub enum Value {
-    Num(EthNum),
-    Str(EthString),
-    Bool(bool),
-    Nil,
-}
-
 fn is_truthy(val: &Value) -> bool {
     match val {
         Value::Nil => false,
@@ -169,10 +164,12 @@ impl TryFrom<&Token> for Value {
     }
 }
 
-pub struct Interpreter;
+pub struct Interpreter<'source> {
+    env: Environment<'source>,
+}
 
-impl Interpreter {
-    pub fn interpret(&self, stmts: &[Stmt]) -> Result<(), InterpreterError> {
+impl<'source> Interpreter<'source> {
+    pub fn interpret(&self, stmts: &'source [Stmt]) -> Result<(), InterpreterError> {
         for stmt in stmts {
             self.visit_stmt(stmt)?;
         }
@@ -181,7 +178,7 @@ impl Interpreter {
     }
 }
 
-impl ExprVisitor for Interpreter {
+impl<'source> ExprVisitor for Interpreter<'source> {
     type Out = Result<Value, InterpreterError>;
 
     fn visit_expr(&self, expr: &Expr) -> Result<Value, InterpreterError> {
@@ -258,17 +255,18 @@ impl ExprVisitor for Interpreter {
     }
 }
 
-impl StmtVisitor for Interpreter {
+impl<'source> StmtVisitor for Interpreter<'source> {
     type Out = Result<(), InterpreterError>;
 
-    fn visit_stmt(&self, stmt: &Stmt) -> Self::Out {
+    fn visit_stmt(&self, stmt: &'source Stmt) -> Self::Out {
         match *stmt {
             Stmt::Expr(_) => self.visit_expr_stmt(stmt),
             Stmt::Print(_) => self.visit_print(stmt),
+            Stmt::Var(_) => self.visit_var_stmt(stmt),
         }
     }
 
-    fn visit_expr_stmt(&self, stmt: &Stmt) -> Self::Out {
+    fn visit_expr_stmt(&self, stmt: &'source Stmt) -> Self::Out {
         if let Stmt::Expr(e) = stmt {
             self.visit_expr(e)?;
         } else {
@@ -280,10 +278,25 @@ impl StmtVisitor for Interpreter {
         Ok(())
     }
 
-    fn visit_print(&self, stmt: &Stmt) -> Self::Out {
+    fn visit_print(&self, stmt: &'source Stmt) -> Self::Out {
         if let Stmt::Print(e) = stmt {
             let value = self.visit_expr(e)?;
             println!("{}", value);
+        } else {
+            return Err(InterpreterError::Argument {
+                literal: format!("{:?}", stmt),
+            });
+        }
+
+        Ok(())
+    }
+
+    fn visit_var_stmt(&self, stmt: &'source Stmt) -> Self::Out {
+        if let Stmt::Var(var) = stmt {
+            if let Some(e) = var.init {
+                let value = self.visit_expr(&e)?;
+                self.env.define(&var.name, value);
+            }
         } else {
             return Err(InterpreterError::Argument {
                 literal: format!("{:?}", stmt),

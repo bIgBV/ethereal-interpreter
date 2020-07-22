@@ -9,7 +9,7 @@ mod interpreter;
 mod parser;
 mod printer;
 mod scanner;
-mod statement;
+mod state;
 
 use interpreter::Interpreter;
 use parser::Parser;
@@ -57,9 +57,16 @@ fn run<T: AsRef<str>>(path: T) -> Result<(), Box<dyn std::error::Error>> {
     let parser = Parser::new(scanner.scan_tokens());
     let interpreter = Interpreter;
 
-    match parser.parse() {
-        Ok(stmts) => interpreter.interpret(&stmts)?,
-        Err(e) => println!("Error: {}", e),
+    let (stmts, errs) = parser.parse();
+
+    if errs.len() > 0 {
+        let length = errs.len();
+        for err in errs {
+            println!("{}", err);
+        }
+        println!("Execution failed due to {} errors.", length);
+    } else {
+        interpreter.interpret(&stmts);
     }
 
     Ok(())

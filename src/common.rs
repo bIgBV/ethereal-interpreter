@@ -1,4 +1,8 @@
-use std::fmt;
+use std::{
+    fmt,
+    hash::{Hash, Hasher},
+    ops::{Deref, DerefMut},
+};
 
 pub trait ExprVisitor {
     type Out;
@@ -8,14 +12,16 @@ pub trait ExprVisitor {
     fn visit_literal(&self, expr: &Expr) -> Self::Out;
     fn visit_unary(&self, expr: &Expr) -> Self::Out;
     fn visit_group(&self, expr: &Expr) -> Self::Out;
+    fn visit_var(&self, expr: &Expr) -> Self::Out;
 }
 
 pub trait StmtVisitor {
     type Out;
 
+    fn visit_stmt(&self, stmt: &Stmt) -> Self::Out;
     fn visit_print(&self, stmt: &Stmt) -> Self::Out;
     fn visit_expr_stmt(&self, stmt: &Stmt) -> Self::Out;
-    fn visit_stmt(&self, stmt: &Stmt) -> Self::Out;
+    fn visit_var_stmt(&self, stmt: &Stmt) -> Self::Out;
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -36,8 +42,8 @@ pub enum Stmt {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Variable {
-    name: Token,
-    init: Expr,
+    pub name: Token,
+    pub init: Option<Expr>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -56,11 +62,34 @@ pub struct Binary {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Operator(pub Token);
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Token {
     pub kind: TokenKind,
-    range: (usize, usize),
+    pub range: (usize, usize),
     line: usize,
+}
+
+impl PartialEq for Token {
+    fn eq(&self, other: &Token) -> bool {
+        let (start1, end1) = self.range;
+        let (start2, end2) = other.range;
+
+        // Tokens are equal if they were parsed from the same piece of source.
+        start1 == start2 && end1 == end2
+    }
+}
+
+impl Eq for Token {}
+
+impl Hash for Token {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.line.hash(state);
+
+        // Two tokens will always have different ranges.
+        let (start, end) = self.range;
+        start.hash(state);
+        end.hash(state);
+    }
 }
 
 impl Token {
@@ -144,6 +173,14 @@ impl TokenKind {
     }
 }
 
+#[derive(Debug)]
+pub enum Value {
+    Num(EthNum),
+    Str(EthString),
+    Bool(bool),
+    Nil,
+}
+
 #[derive(Clone, Eq, PartialEq, Hash, Ord, PartialOrd, Debug)]
 pub struct EthString(pub String);
 
@@ -153,12 +190,40 @@ impl fmt::Display for EthString {
     }
 }
 
+impl Deref for EthString {
+    type Target = String;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for EthString {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
 #[derive(Clone, PartialEq, PartialOrd, Debug)]
 pub struct EthNum(pub f64);
 
 impl fmt::Display for EthNum {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
+    }
+}
+
+impl Deref for EthNum {
+    type Target = f64;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for EthNum {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 
