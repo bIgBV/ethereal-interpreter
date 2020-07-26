@@ -77,8 +77,7 @@ impl<'a> Parser<'a> {
 
         Ok(Stmt::Var(common::Variable {
             name: name.clone(),
-            init: initializer
-                .unwrap_or_else(|| panic!("We should definitely have an expression at this point")),
+            init: initializer,
         }))
     }
 

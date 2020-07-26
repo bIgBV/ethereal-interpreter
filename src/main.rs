@@ -3,6 +3,8 @@ use std::{
     io::{self, stdin, BufRead, Write},
 };
 
+use sharded_slab::Slab;
+
 mod common;
 mod error;
 mod interpreter;
@@ -55,7 +57,7 @@ fn run_prompt() {
 fn run<T: AsRef<str>>(path: T) -> Result<(), Box<dyn std::error::Error>> {
     let mut scanner = Scanner::new(path.as_ref());
     let parser = Parser::new(scanner.scan_tokens());
-    let interpreter = Interpreter;
+    let interpreter = Interpreter::new();
 
     let (stmts, errs) = parser.parse();
 

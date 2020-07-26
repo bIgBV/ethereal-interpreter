@@ -126,6 +126,66 @@ impl Display for Value {
     }
 }
 
+#[derive(Debug)]
+pub enum Output<'a, T> {
+    Val(T),
+    Ref(&'a T),
+}
+
+impl<'a, T> Output<'a, T> {
+    fn as_ref(&self) -> &T {
+        match self {
+            Output::Val(v) => v,
+            Output::Ref(v) => *v,
+        }
+    }
+
+    fn map_with<F, U>(self, other: Output<T>, f: F) -> U
+    where
+        F: FnOnce(T, T) -> U,
+    {
+        match (self, other) {
+            (Output::Val(l), Output::Val(r)) => f(l, r),
+            (Output::Ref(l), Output::Ref(r)) => f(*l, *r),
+            _ => unimplemented!(),
+        }
+    }
+
+    fn map<F, U>(self, f: F) -> U
+    where
+        F: FnOnce(T) -> U,
+    {
+        match self {
+            Output::Val(v) => f(v),
+            Output::Ref(v) => f(*v),
+        }
+    }
+}
+
+impl<'a> From<Value> for Output<'a, Value> {
+    fn from(v: Value) -> Self {
+        Output::Val(v)
+    }
+}
+
+impl<'a> From<&'a Value> for Output<'a, Value> {
+    fn from(v: &'a Value) -> Self {
+        Output::Ref(v)
+    }
+}
+
+impl<'a, T> Display for Output<'a, T>
+where
+    T: Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Output::Val(v) => write!(f, "{}", v),
+            Output::Ref(v) => write!(f, "{}", *v),
+        }
+    }
+}
+
 fn is_truthy(val: &Value) -> bool {
     match val {
         Value::Nil => false,
@@ -175,6 +235,12 @@ pub struct Interpreter<'source> {
 }
 
 impl<'source> Interpreter<'source> {
+    pub fn new() -> Self {
+        Interpreter {
+            env: Environment::new(),
+        }
+    }
+
     pub fn interpret<'us>(&'us self, stmts: &'source [Stmt]) -> Result<(), InterpreterError>
     where
         'source: 'us,
@@ -187,10 +253,10 @@ impl<'source> Interpreter<'source> {
     }
 }
 
-impl<'us, 'source: 'us> ExprVisitor<'us, 'source> for Interpreter<'source> {
-    type Out = Result<Value, InterpreterError>;
+pub type VisitorResult<'a> = Result<Output<'a, Value>, InterpreterError>;
 
-    fn visit_expr(&self, expr: &'source Expr) -> Result<Value, InterpreterError> {
+impl<'us, 'source: 'us> ExprVisitor<'us, 'source, VisitorResult<'us>> for Interpreter<'source> {
+    fn visit_expr(&self, expr: &'source Expr) -> VisitorResult<'_> {
         match expr {
             Expr::Literal(_) => self.visit_literal(expr),
             Expr::Binary(_) => self.visit_binary(expr),
@@ -200,22 +266,25 @@ impl<'us, 'source: 'us> ExprVisitor<'us, 'source> for Interpreter<'source> {
         }
     }
 
-    fn visit_binary(&self, expr: &'source Expr) -> Self::Out {
+    fn visit_binary(&self, expr: &'source Expr) -> VisitorResult<'_> {
         if let Expr::Binary(bin) = expr {
             let left = self.visit_expr(&bin.left)?;
             let right = self.visit_expr(&bin.right)?;
 
             match bin.operator.0.kind {
-                TokenKind::Plus => left + right,
-                TokenKind::Minus => left - right,
-                TokenKind::Star => left * right,
-                TokenKind::Slash => left / right,
-                TokenKind::Greater => Ok(Value::Bool(left > right)),
-                TokenKind::GreaterEqual => Ok(Value::Bool(left >= right)),
-                TokenKind::Less => Ok(Value::Bool(left < right)),
-                TokenKind::LessEqual => Ok(Value::Bool(left <= right)),
-                TokenKind::BangEqual => Ok(Value::Bool(!is_equal(&left, &right))),
-                TokenKind::EqualEqual => Ok(Value::Bool(is_equal(&left, &right))),
+                TokenKind::Plus => Ok(left.map_with(right, |l, r| l + r)?.into()),
+                TokenKind::Minus => Ok(left.map_with(right, |l, r| l - r)?.into()),
+                TokenKind::Star => Ok(left.map_with(right, |l, r| l * r)?.into()),
+                TokenKind::Slash => Ok(left.map_with(right, |l, r| l / r)?.into()),
+                TokenKind::Greater => Ok(left.map_with(right, |l, r| Value::Bool(l > r)).into()),
+                TokenKind::Less => Ok(left.map_with(right, |l, r| Value::Bool(l < r)).into()),
+                TokenKind::LessEqual => Ok(left.map_with(right, |l, r| Value::Bool(l <= r)).into()),
+                TokenKind::BangEqual => {
+                    Ok(left.map_with(right, |l, r| Value::Bool(!is_equal(&l, &r)).into()))
+                }
+                TokenKind::EqualEqual => {
+                    Ok(left.map_with(right, |l, r| Value::Bool(is_equal(&l, &r)).into()))
+                }
                 _ => Err(InterpreterError::Argument {
                     literal: format!("{}", bin.operator.0),
                 }),
@@ -227,9 +296,9 @@ impl<'us, 'source: 'us> ExprVisitor<'us, 'source> for Interpreter<'source> {
         }
     }
 
-    fn visit_literal(&self, expr: &'source Expr) -> Self::Out {
+    fn visit_literal(&'us self, expr: &'source Expr) -> VisitorResult<'_> {
         if let Expr::Literal(e) = expr {
-            e.try_into()
+            Ok(Output::Val(e.try_into()?))
         } else {
             Err(InterpreterError::Argument {
                 literal: format!("{:?}", expr),
@@ -237,12 +306,12 @@ impl<'us, 'source: 'us> ExprVisitor<'us, 'source> for Interpreter<'source> {
         }
     }
 
-    fn visit_unary(&self, expr: &'source Expr) -> Self::Out {
+    fn visit_unary(&self, expr: &'source Expr) -> VisitorResult<'_> {
         if let Expr::Unary(e) = expr {
             let literal = self.visit_literal(&e.right)?;
             match e.operator.kind {
-                TokenKind::Minus => -literal,
-                TokenKind::Bang => Ok(Value::Bool(!is_truthy(&literal))),
+                TokenKind::Minus => Ok(literal.map(|v| -v)?.into()),
+                TokenKind::Bang => Ok(literal.map(|v| Value::Bool(!is_truthy(&v))).into()),
                 _ => Err(InterpreterError::Argument {
                     literal: format!("{}", e.operator),
                 }),
@@ -254,7 +323,7 @@ impl<'us, 'source: 'us> ExprVisitor<'us, 'source> for Interpreter<'source> {
         }
     }
 
-    fn visit_group(&self, expr: &'source Expr) -> Self::Out {
+    fn visit_group(&self, expr: &'source Expr) -> VisitorResult<'_> {
         if let Expr::Group(e) = expr {
             self.visit_expr(e)
         } else {
@@ -264,9 +333,14 @@ impl<'us, 'source: 'us> ExprVisitor<'us, 'source> for Interpreter<'source> {
         }
     }
 
-    fn visit_var(&self, expr: &'source Expr) -> Self::Out {
+    fn visit_var(&self, expr: &'source Expr) -> VisitorResult<'_> {
         if let Expr::Variable(var) = expr {
-            self.env.get(token).map_err(e.into())
+            self.env
+                .get(var)
+                .map(|v| v.into())
+                .map_err(|e| InterpreterError::Env {
+                    source: Box::new(e),
+                })
         } else {
             Err(InterpreterError::Argument {
                 literal: format!("{:?}", expr),
@@ -275,10 +349,10 @@ impl<'us, 'source: 'us> ExprVisitor<'us, 'source> for Interpreter<'source> {
     }
 }
 
-impl<'us, 'source: 'us> StmtVisitor<'us, 'source> for Interpreter<'source> {
-    type Out = Result<(), InterpreterError>;
+type StmtResult = Result<(), InterpreterError>;
 
-    fn visit_stmt(&self, stmt: &'source Stmt) -> Self::Out {
+impl<'us, 'source: 'us> StmtVisitor<'us, 'source, StmtResult> for Interpreter<'source> {
+    fn visit_stmt(&self, stmt: &'source Stmt) -> StmtResult {
         match *stmt {
             Stmt::Expr(_) => self.visit_expr_stmt(stmt),
             Stmt::Print(_) => self.visit_print(stmt),
@@ -286,7 +360,7 @@ impl<'us, 'source: 'us> StmtVisitor<'us, 'source> for Interpreter<'source> {
         }
     }
 
-    fn visit_expr_stmt(&self, stmt: &'source Stmt) -> Self::Out {
+    fn visit_expr_stmt(&self, stmt: &'source Stmt) -> StmtResult {
         if let Stmt::Expr(e) = stmt {
             self.visit_expr(e)?;
         } else {
@@ -298,7 +372,7 @@ impl<'us, 'source: 'us> StmtVisitor<'us, 'source> for Interpreter<'source> {
         Ok(())
     }
 
-    fn visit_print(&self, stmt: &'source Stmt) -> Self::Out {
+    fn visit_print(&self, stmt: &'source Stmt) -> StmtResult {
         if let Stmt::Print(e) = stmt {
             let value = self.visit_expr(e)?;
             println!("{}", value);
@@ -311,11 +385,14 @@ impl<'us, 'source: 'us> StmtVisitor<'us, 'source> for Interpreter<'source> {
         Ok(())
     }
 
-    fn visit_var_stmt(&self, stmt: &'source Stmt) -> Self::Out {
+    fn visit_var_stmt(&self, stmt: &'source Stmt) -> StmtResult {
         if let Stmt::Var(var) = stmt {
             if let Some(e) = var.init {
                 let value = self.visit_expr(&e)?;
-                self.env.define(&var.name, value);
+                match value {
+                    Output::Val(v) => self.env.define(&var.name, v),
+                    Output::Ref(_) => panic!("Trying to re-insert an inserted value"),
+                }
             }
         } else {
             return Err(InterpreterError::Argument {
