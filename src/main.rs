@@ -3,8 +3,6 @@ use std::{
     io::{self, stdin, BufRead, Write},
 };
 
-use sharded_slab::Slab;
-
 mod common;
 mod error;
 mod interpreter;

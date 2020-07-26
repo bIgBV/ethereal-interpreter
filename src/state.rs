@@ -2,10 +2,7 @@ use thiserror::Error;
 
 use std::collections::HashMap;
 
-use crate::{
-    common::{Token, Value},
-    interpreter::Output,
-};
+use crate::common::{Token, Value};
 
 pub struct Environment<'a> {
     values: HashMap<&'a Token, Value>,

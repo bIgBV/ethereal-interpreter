@@ -9,7 +9,7 @@ version = "0.1.0"
 [dependencies]
 once_cell = "0.1.8"
 thiserror = "1.0.20"
-sharded-slab = "0.0.9"
+dashmap = "3.11.7"
 
 [dev-dependencies]
 pretty_assertions = "0.6.1"

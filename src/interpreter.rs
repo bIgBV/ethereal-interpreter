@@ -1,13 +1,16 @@
-use crate::{
-    common::{EthNum, EthString, Expr, ExprVisitor, Stmt, StmtVisitor, Token, TokenKind, Value},
-    state::Environment,
+use crate::common::{
+    EthNum, EthString, Expr, ExprVisitor, Stmt, StmtVisitor, Token, TokenKind, Value,
 };
 
 use std::{
+    borrow::Borrow,
+    cell::RefCell,
     cmp::{Ordering, PartialEq, PartialOrd},
+    collections::HashMap,
     convert::{TryFrom, TryInto},
     fmt::{self, Display},
     ops::{Add, Div, Mul, Neg, Not, Sub},
+    rc::Rc,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -19,11 +22,8 @@ pub enum InterpreterError {
     #[error("Incorrect argument provided: {literal}")]
     Argument { literal: String },
 
-    #[error(transparent)]
-    Env {
-        #[from]
-        source: Box<dyn std::error::Error>,
-    },
+    #[error("Undefined variable {name}.")]
+    UndefinedVar { range: (usize, usize), name: String },
 }
 
 impl Add for Value {
@@ -127,16 +127,16 @@ impl Display for Value {
 }
 
 #[derive(Debug)]
-pub enum Output<'a, T> {
+pub enum Output<T> {
     Val(T),
-    Ref(&'a T),
+    Ref(Rc<T>),
 }
 
-impl<'a, T> Output<'a, T> {
+impl<T> Output<T> {
     fn as_ref(&self) -> &T {
         match self {
             Output::Val(v) => v,
-            Output::Ref(v) => *v,
+            Output::Ref(v) => v.as_ref(),
         }
     }
 
@@ -162,19 +162,19 @@ impl<'a, T> Output<'a, T> {
     }
 }
 
-impl<'a> From<Value> for Output<'a, Value> {
+impl<'a> From<Value> for Output<Value> {
     fn from(v: Value) -> Self {
         Output::Val(v)
     }
 }
 
-impl<'a> From<&'a Value> for Output<'a, Value> {
-    fn from(v: &'a Value) -> Self {
+impl From<Rc<Value>> for Output<Value> {
+    fn from(v: Rc<Value>) -> Self {
         Output::Ref(v)
     }
 }
 
-impl<'a, T> Display for Output<'a, T>
+impl<T> Display for Output<T>
 where
     T: Display,
 {
@@ -231,13 +231,13 @@ impl TryFrom<&Token> for Value {
 }
 
 pub struct Interpreter<'source> {
-    env: Environment<'source>,
+    env: RefCell<HashMap<&'source Token, Rc<Value>>>,
 }
 
 impl<'source> Interpreter<'source> {
     pub fn new() -> Self {
         Interpreter {
-            env: Environment::new(),
+            env: RefCell::new(HashMap::new()),
         }
     }
 
@@ -253,10 +253,10 @@ impl<'source> Interpreter<'source> {
     }
 }
 
-pub type VisitorResult<'a> = Result<Output<'a, Value>, InterpreterError>;
+pub type VisitorResult = Result<Output<Value>, InterpreterError>;
 
-impl<'us, 'source: 'us> ExprVisitor<'us, 'source, VisitorResult<'us>> for Interpreter<'source> {
-    fn visit_expr(&self, expr: &'source Expr) -> VisitorResult<'_> {
+impl<'us, 'source: 'us> ExprVisitor<'us, 'source, VisitorResult> for Interpreter<'source> {
+    fn visit_expr(&self, expr: &'source Expr) -> VisitorResult {
         match expr {
             Expr::Literal(_) => self.visit_literal(expr),
             Expr::Binary(_) => self.visit_binary(expr),
@@ -266,7 +266,7 @@ impl<'us, 'source: 'us> ExprVisitor<'us, 'source, VisitorResult<'us>> for Interp
         }
     }
 
-    fn visit_binary(&self, expr: &'source Expr) -> VisitorResult<'_> {
+    fn visit_binary(&self, expr: &'source Expr) -> VisitorResult {
         if let Expr::Binary(bin) = expr {
             let left = self.visit_expr(&bin.left)?;
             let right = self.visit_expr(&bin.right)?;
@@ -296,7 +296,7 @@ impl<'us, 'source: 'us> ExprVisitor<'us, 'source, VisitorResult<'us>> for Interp
         }
     }
 
-    fn visit_literal(&'us self, expr: &'source Expr) -> VisitorResult<'_> {
+    fn visit_literal(&'us self, expr: &'source Expr) -> VisitorResult {
         if let Expr::Literal(e) = expr {
             Ok(Output::Val(e.try_into()?))
         } else {
@@ -306,7 +306,7 @@ impl<'us, 'source: 'us> ExprVisitor<'us, 'source, VisitorResult<'us>> for Interp
         }
     }
 
-    fn visit_unary(&self, expr: &'source Expr) -> VisitorResult<'_> {
+    fn visit_unary(&self, expr: &'source Expr) -> VisitorResult {
         if let Expr::Unary(e) = expr {
             let literal = self.visit_literal(&e.right)?;
             match e.operator.kind {
@@ -323,7 +323,7 @@ impl<'us, 'source: 'us> ExprVisitor<'us, 'source, VisitorResult<'us>> for Interp
         }
     }
 
-    fn visit_group(&self, expr: &'source Expr) -> VisitorResult<'_> {
+    fn visit_group(&self, expr: &'source Expr) -> VisitorResult {
         if let Expr::Group(e) = expr {
             self.visit_expr(e)
         } else {
@@ -333,14 +333,14 @@ impl<'us, 'source: 'us> ExprVisitor<'us, 'source, VisitorResult<'us>> for Interp
         }
     }
 
-    fn visit_var(&self, expr: &'source Expr) -> VisitorResult<'_> {
+    fn visit_var(&self, expr: &'source Expr) -> VisitorResult {
         if let Expr::Variable(var) = expr {
-            self.env
-                .get(var)
-                .map(|v| v.into())
-                .map_err(|e| InterpreterError::Env {
-                    source: Box::new(e),
-                })
+            self.env.borrow().get(var).map(|v| v.clone().into()).ok_or(
+                InterpreterError::UndefinedVar {
+                    range: var.range,
+                    name: String::new(),
+                },
+            )
         } else {
             Err(InterpreterError::Argument {
                 literal: format!("{:?}", expr),
@@ -387,12 +387,12 @@ impl<'us, 'source: 'us> StmtVisitor<'us, 'source, StmtResult> for Interpreter<'s
 
     fn visit_var_stmt(&self, stmt: &'source Stmt) -> StmtResult {
         if let Stmt::Var(var) = stmt {
-            if let Some(e) = var.init {
+            if let Some(e) = &var.init {
                 let value = self.visit_expr(&e)?;
                 match value {
-                    Output::Val(v) => self.env.define(&var.name, v),
+                    Output::Val(v) => self.env.borrow_mut().insert(&var.name, Rc::new(v)),
                     Output::Ref(_) => panic!("Trying to re-insert an inserted value"),
-                }
+                };
             }
         } else {
             return Err(InterpreterError::Argument {
