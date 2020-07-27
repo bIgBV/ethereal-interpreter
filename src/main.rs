@@ -9,7 +9,6 @@ mod interpreter;
 mod parser;
 mod printer;
 mod scanner;
-mod state;
 
 use interpreter::Interpreter;
 use parser::Parser;

@@ -40,7 +40,32 @@ impl Add for Value {
     }
 }
 
+impl Add for &Value {
+    type Output = Result<Value, InterpreterError>;
+
+    fn add(self, other: Self) -> Self::Output {
+        match (self, other) {
+            (Value::Num(lhs), Value::Num(rhs)) => Ok(Value::Num(EthNum(lhs.0 + rhs.0))),
+            (Value::Str(lhs), Value::Str(rhs)) => {
+                Ok(Value::Str(EthString(format!("{}{}", lhs.0, rhs.0))))
+            }
+            _ => Err(InterpreterError::Paramters { operator: "+" }),
+        }
+    }
+}
+
 impl Sub for Value {
+    type Output = Result<Value, InterpreterError>;
+
+    fn sub(self, other: Self) -> Self::Output {
+        match (self, other) {
+            (Value::Num(lhs), Value::Num(rhs)) => Ok(Value::Num(EthNum(lhs.0 - rhs.0))),
+            _ => Err(InterpreterError::Paramters { operator: "-" }),
+        }
+    }
+}
+
+impl Sub for &Value {
     type Output = Result<Value, InterpreterError>;
 
     fn sub(self, other: Self) -> Self::Output {
@@ -62,6 +87,17 @@ impl Mul for Value {
     }
 }
 
+impl Mul for &Value {
+    type Output = Result<Value, InterpreterError>;
+
+    fn mul(self, other: Self) -> Self::Output {
+        match (self, other) {
+            (Value::Num(lhs), Value::Num(rhs)) => Ok(Value::Num(EthNum(lhs.0 * rhs.0))),
+            _ => Err(InterpreterError::Paramters { operator: "*" }),
+        }
+    }
+}
+
 impl Div for Value {
     type Output = Result<Value, InterpreterError>;
 
@@ -73,7 +109,29 @@ impl Div for Value {
     }
 }
 
+impl Div for &Value {
+    type Output = Result<Value, InterpreterError>;
+
+    fn div(self, other: Self) -> Self::Output {
+        match (self, other) {
+            (Value::Num(lhs), Value::Num(rhs)) => Ok(Value::Num(EthNum(lhs.0 / rhs.0))),
+            _ => Err(InterpreterError::Paramters { operator: "/" }),
+        }
+    }
+}
+
 impl Neg for Value {
+    type Output = Result<Value, InterpreterError>;
+
+    fn neg(self) -> Self::Output {
+        match self {
+            Value::Num(n) => Ok(Value::Num(EthNum(-n.0))),
+            _ => Err(InterpreterError::Paramters { operator: "-" }),
+        }
+    }
+}
+
+impl Neg for &Value {
     type Output = Result<Value, InterpreterError>;
 
     fn neg(self) -> Self::Output {
@@ -133,34 +191,29 @@ pub enum Output<T> {
 }
 
 impl<T> Output<T> {
-    fn as_ref(&self) -> &T {
-        match self {
-            Output::Val(v) => v,
-            Output::Ref(v) => v.as_ref(),
-        }
-    }
-
     fn map_with<F, U>(self, other: Output<T>, f: F) -> U
     where
-        F: FnOnce(T, T) -> U,
+        F: FnOnce(&T, &T) -> U,
     {
         match (self, other) {
-            (Output::Val(l), Output::Val(r)) => f(l, r),
-            (Output::Ref(l), Output::Ref(r)) => f(*l, *r),
+            (Output::Val(l), Output::Val(r)) => f(&l, &r),
+            (Output::Ref(l), Output::Ref(r)) => f(l.as_ref(), r.as_ref()),
             _ => unimplemented!(),
         }
     }
 
     fn map<F, U>(self, f: F) -> U
     where
-        F: FnOnce(T) -> U,
+        F: FnOnce(&T) -> U,
     {
         match self {
-            Output::Val(v) => f(v),
-            Output::Ref(v) => f(*v),
+            Output::Val(v) => f(&v),
+            Output::Ref(v) => f(v.as_ref()),
         }
     }
 }
+
+impl<Value> Output<Value> {}
 
 impl<'a> From<Value> for Output<Value> {
     fn from(v: Value) -> Self {
