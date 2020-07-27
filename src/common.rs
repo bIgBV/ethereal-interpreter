@@ -4,23 +4,20 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-pub trait ExprVisitor<'us, 'source: 'us, O>
-where
-    O: 'us,
-{
-    fn visit_expr(&'us self, expr: &'source Expr) -> O;
-    fn visit_binary(&'us self, expr: &'source Expr) -> O;
-    fn visit_literal(&'us self, expr: &'source Expr) -> O;
-    fn visit_unary(&'us self, expr: &'source Expr) -> O;
-    fn visit_group(&'us self, expr: &'source Expr) -> O;
-    fn visit_var(&'us self, expr: &'source Expr) -> O;
+pub trait ExprVisitor<O> {
+    fn visit_expr(&self, expr: &Expr) -> O;
+    fn visit_binary(&self, expr: &Expr) -> O;
+    fn visit_literal(&self, expr: &Expr) -> O;
+    fn visit_unary(&self, expr: &Expr) -> O;
+    fn visit_group(&self, expr: &Expr) -> O;
+    fn visit_var(&self, expr: &Expr) -> O;
 }
 
-pub trait StmtVisitor<'us, 'source: 'us, O> {
-    fn visit_stmt(&'us self, stmt: &'source Stmt) -> O;
-    fn visit_print(&'us self, stmt: &'source Stmt) -> O;
-    fn visit_expr_stmt(&'us self, stmt: &'source Stmt) -> O;
-    fn visit_var_stmt(&'us self, stmt: &'source Stmt) -> O;
+pub trait StmtVisitor<O> {
+    fn visit_stmt(&self, stmt: &Stmt) -> O;
+    fn visit_print(&self, stmt: &Stmt) -> O;
+    fn visit_expr_stmt(&self, stmt: &Stmt) -> O;
+    fn visit_var_stmt(&self, stmt: &Stmt) -> O;
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -64,17 +61,13 @@ pub struct Operator(pub Token);
 #[derive(Debug, Clone)]
 pub struct Token {
     pub kind: TokenKind,
-    pub range: (usize, usize),
+    pub lexeme: String,
     line: usize,
 }
 
 impl PartialEq for Token {
     fn eq(&self, other: &Token) -> bool {
-        let (start1, end1) = self.range;
-        let (start2, end2) = other.range;
-
-        // Tokens are equal if they were parsed from the same piece of source.
-        start1 == start2 && end1 == end2
+        self.lexeme == other.lexeme
     }
 }
 
@@ -84,19 +77,16 @@ impl Hash for Token {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.line.hash(state);
 
-        // Two tokens will always have different ranges.
-        let (start, end) = self.range;
-        start.hash(state);
-        end.hash(state);
+        self.lexeme.hash(state)
     }
 }
 
 impl Token {
-    pub fn new(kind: TokenKind, start: usize, end: usize, line: usize) -> Self {
+    pub fn new(kind: TokenKind, lexeme: &str, line: usize) -> Self {
         Self {
             kind,
             line,
-            range: (start, end),
+            lexeme: String::from(lexeme),
         }
     }
 }

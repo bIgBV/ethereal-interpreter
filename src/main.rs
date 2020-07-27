@@ -14,26 +14,41 @@ use interpreter::Interpreter;
 use parser::Parser;
 use scanner::Scanner;
 
+struct State {
+    interpreter: Interpreter,
+    source: String,
+}
+
+impl State {
+    pub fn new() -> Self {
+        State {
+            interpreter: Interpreter::new(),
+            source: String::new(),
+        }
+    }
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
+    let state = State::new();
 
     if dbg!(dbg!(args.len()) > 1) {
         println!("Usage: jlox [script]");
     } else if args.len() == 2 {
-        match run(&args[1]) {
-            Ok(_) => (),
-            Err(e) => panic!("{}", e),
-        };
+        // match run(&args[1], &mut state.interpreter) {
+        //     Ok(_) => (),
+        //     Err(e) => panic!("{}", e),
+        // };
     } else {
-        run_prompt();
+        run_prompt(state);
     }
     println!("Hello, world!");
 }
 
-fn run_prompt() {
+fn run_prompt(mut state: State) {
     let stdin = stdin();
     let mut reader = stdin.lock();
-    let mut buffer = String::new();
+    let mut buffer = state.source;
 
     println!("Running ethereal-interpreter 0.0.1");
 
@@ -43,7 +58,7 @@ fn run_prompt() {
         reader
             .read_line(&mut buffer)
             .expect("Unable to read to string");
-        match run(&buffer) {
+        match run(&buffer, &mut state.interpreter) {
             Ok(_) => (),
             Err(e) => println!("{}", e),
         };
@@ -51,10 +66,14 @@ fn run_prompt() {
     }
 }
 
-fn run<T: AsRef<str>>(path: T) -> Result<(), Box<dyn std::error::Error>> {
+fn run<T: AsRef<str>>(
+    path: T,
+    interpreter: &mut Interpreter,
+) -> Result<(), Box<dyn std::error::Error>> {
     let mut scanner = Scanner::new(path.as_ref());
     let parser = Parser::new(scanner.scan_tokens());
-    let interpreter = Interpreter::new();
+
+    dbg!(path.as_ref());
 
     let (stmts, errs) = parser.parse();
 
@@ -65,7 +84,7 @@ fn run<T: AsRef<str>>(path: T) -> Result<(), Box<dyn std::error::Error>> {
         }
         println!("Execution failed due to {} errors.", length);
     } else {
-        interpreter.interpret(&stmts);
+        interpreter.interpret(&stmts)?;
     }
 
     Ok(())

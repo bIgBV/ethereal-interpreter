@@ -3,7 +3,6 @@ use crate::common::{
 };
 
 use std::{
-    borrow::Borrow,
     cell::RefCell,
     cmp::{Ordering, PartialEq, PartialOrd},
     collections::HashMap,
@@ -23,7 +22,7 @@ pub enum InterpreterError {
     Argument { literal: String },
 
     #[error("Undefined variable {name}.")]
-    UndefinedVar { range: (usize, usize), name: String },
+    UndefinedVar { name: String },
 }
 
 impl Add for Value {
@@ -198,7 +197,8 @@ impl<T> Output<T> {
         match (self, other) {
             (Output::Val(l), Output::Val(r)) => f(&l, &r),
             (Output::Ref(l), Output::Ref(r)) => f(l.as_ref(), r.as_ref()),
-            _ => unimplemented!(),
+            (Output::Val(l), Output::Ref(r)) => f(&l, r.as_ref()),
+            (Output::Ref(l), Output::Val(r)) => f(l.as_ref(), &r),
         }
     }
 
@@ -212,8 +212,6 @@ impl<T> Output<T> {
         }
     }
 }
-
-impl<Value> Output<Value> {}
 
 impl<'a> From<Value> for Output<Value> {
     fn from(v: Value) -> Self {
@@ -283,21 +281,18 @@ impl TryFrom<&Token> for Value {
     }
 }
 
-pub struct Interpreter<'source> {
-    env: RefCell<HashMap<&'source Token, Rc<Value>>>,
+pub struct Interpreter {
+    env: RefCell<HashMap<String, Rc<Value>>>,
 }
 
-impl<'source> Interpreter<'source> {
+impl Interpreter {
     pub fn new() -> Self {
         Interpreter {
             env: RefCell::new(HashMap::new()),
         }
     }
 
-    pub fn interpret<'us>(&'us self, stmts: &'source [Stmt]) -> Result<(), InterpreterError>
-    where
-        'source: 'us,
-    {
+    pub fn interpret(&self, stmts: &[Stmt]) -> Result<(), InterpreterError> {
         for stmt in stmts {
             self.visit_stmt(stmt)?;
         }
@@ -308,8 +303,8 @@ impl<'source> Interpreter<'source> {
 
 pub type VisitorResult = Result<Output<Value>, InterpreterError>;
 
-impl<'us, 'source: 'us> ExprVisitor<'us, 'source, VisitorResult> for Interpreter<'source> {
-    fn visit_expr(&self, expr: &'source Expr) -> VisitorResult {
+impl ExprVisitor<VisitorResult> for Interpreter {
+    fn visit_expr(&self, expr: &Expr) -> VisitorResult {
         match expr {
             Expr::Literal(_) => self.visit_literal(expr),
             Expr::Binary(_) => self.visit_binary(expr),
@@ -319,7 +314,7 @@ impl<'us, 'source: 'us> ExprVisitor<'us, 'source, VisitorResult> for Interpreter
         }
     }
 
-    fn visit_binary(&self, expr: &'source Expr) -> VisitorResult {
+    fn visit_binary(&self, expr: &Expr) -> VisitorResult {
         if let Expr::Binary(bin) = expr {
             let left = self.visit_expr(&bin.left)?;
             let right = self.visit_expr(&bin.right)?;
@@ -349,7 +344,7 @@ impl<'us, 'source: 'us> ExprVisitor<'us, 'source, VisitorResult> for Interpreter
         }
     }
 
-    fn visit_literal(&'us self, expr: &'source Expr) -> VisitorResult {
+    fn visit_literal(&self, expr: &Expr) -> VisitorResult {
         if let Expr::Literal(e) = expr {
             Ok(Output::Val(e.try_into()?))
         } else {
@@ -359,7 +354,7 @@ impl<'us, 'source: 'us> ExprVisitor<'us, 'source, VisitorResult> for Interpreter
         }
     }
 
-    fn visit_unary(&self, expr: &'source Expr) -> VisitorResult {
+    fn visit_unary(&self, expr: &Expr) -> VisitorResult {
         if let Expr::Unary(e) = expr {
             let literal = self.visit_literal(&e.right)?;
             match e.operator.kind {
@@ -376,7 +371,7 @@ impl<'us, 'source: 'us> ExprVisitor<'us, 'source, VisitorResult> for Interpreter
         }
     }
 
-    fn visit_group(&self, expr: &'source Expr) -> VisitorResult {
+    fn visit_group(&self, expr: &Expr) -> VisitorResult {
         if let Expr::Group(e) = expr {
             self.visit_expr(e)
         } else {
@@ -386,14 +381,17 @@ impl<'us, 'source: 'us> ExprVisitor<'us, 'source, VisitorResult> for Interpreter
         }
     }
 
-    fn visit_var(&self, expr: &'source Expr) -> VisitorResult {
+    fn visit_var(&self, expr: &Expr) -> VisitorResult {
         if let Expr::Variable(var) = expr {
-            self.env.borrow().get(var).map(|v| v.clone().into()).ok_or(
-                InterpreterError::UndefinedVar {
-                    range: var.range,
-                    name: String::new(),
-                },
-            )
+            dbg!(var.lexeme.as_str());
+            dbg!(&self.env);
+            self.env
+                .borrow()
+                .get(var.lexeme.as_str())
+                .map(|v| v.clone().into())
+                .ok_or(InterpreterError::UndefinedVar {
+                    name: var.lexeme.clone(),
+                })
         } else {
             Err(InterpreterError::Argument {
                 literal: format!("{:?}", expr),
@@ -404,8 +402,8 @@ impl<'us, 'source: 'us> ExprVisitor<'us, 'source, VisitorResult> for Interpreter
 
 type StmtResult = Result<(), InterpreterError>;
 
-impl<'us, 'source: 'us> StmtVisitor<'us, 'source, StmtResult> for Interpreter<'source> {
-    fn visit_stmt(&self, stmt: &'source Stmt) -> StmtResult {
+impl StmtVisitor<StmtResult> for Interpreter {
+    fn visit_stmt(&self, stmt: &Stmt) -> StmtResult {
         match *stmt {
             Stmt::Expr(_) => self.visit_expr_stmt(stmt),
             Stmt::Print(_) => self.visit_print(stmt),
@@ -413,7 +411,7 @@ impl<'us, 'source: 'us> StmtVisitor<'us, 'source, StmtResult> for Interpreter<'s
         }
     }
 
-    fn visit_expr_stmt(&self, stmt: &'source Stmt) -> StmtResult {
+    fn visit_expr_stmt(&self, stmt: &Stmt) -> StmtResult {
         if let Stmt::Expr(e) = stmt {
             self.visit_expr(e)?;
         } else {
@@ -425,7 +423,7 @@ impl<'us, 'source: 'us> StmtVisitor<'us, 'source, StmtResult> for Interpreter<'s
         Ok(())
     }
 
-    fn visit_print(&self, stmt: &'source Stmt) -> StmtResult {
+    fn visit_print(&self, stmt: &Stmt) -> StmtResult {
         if let Stmt::Print(e) = stmt {
             let value = self.visit_expr(e)?;
             println!("{}", value);
@@ -438,14 +436,19 @@ impl<'us, 'source: 'us> StmtVisitor<'us, 'source, StmtResult> for Interpreter<'s
         Ok(())
     }
 
-    fn visit_var_stmt(&self, stmt: &'source Stmt) -> StmtResult {
+    fn visit_var_stmt(&self, stmt: &Stmt) -> StmtResult {
         if let Stmt::Var(var) = stmt {
             if let Some(e) = &var.init {
                 let value = self.visit_expr(&e)?;
                 match value {
-                    Output::Val(v) => self.env.borrow_mut().insert(&var.name, Rc::new(v)),
+                    Output::Val(v) => self
+                        .env
+                        .borrow_mut()
+                        .insert(var.name.lexeme.clone(), Rc::new(v)),
                     Output::Ref(_) => panic!("Trying to re-insert an inserted value"),
                 };
+
+                dbg!(&self.env.borrow().len());
             }
         } else {
             return Err(InterpreterError::Argument {

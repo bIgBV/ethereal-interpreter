@@ -55,7 +55,7 @@ impl<'a> Parser<'a> {
         match result {
             Ok(s) => Ok(s),
             Err(e) => {
-                self.synchronize();
+                self.synchronize()?;
                 Err(e)
             }
         }
@@ -73,7 +73,7 @@ impl<'a> Parser<'a> {
         self.consume(
             &TokenKind::Semicolon,
             "Expected ';' after variable declaration.",
-        );
+        )?;
 
         Ok(Stmt::Var(common::Variable {
             name: name.clone(),
