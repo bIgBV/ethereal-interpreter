@@ -11,6 +11,7 @@ pub trait ExprVisitor<O> {
     fn visit_unary(&self, expr: &Expr) -> O;
     fn visit_group(&self, expr: &Expr) -> O;
     fn visit_var(&self, expr: &Expr) -> O;
+    fn visit_assign(&self, expr: &Expr) -> O;
 }
 
 pub trait StmtVisitor<O> {
@@ -27,6 +28,7 @@ pub enum Expr {
     Binary(Binary),
     Unary(Unary),
     Variable(Token),
+    Assign(Assign),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -40,6 +42,12 @@ pub enum Stmt {
 pub struct Variable {
     pub name: Token,
     pub init: Option<Expr>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Assign {
+    pub name: Token,
+    pub value: Option<Box<Expr>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

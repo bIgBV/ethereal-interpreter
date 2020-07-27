@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::common::{self, Binary, Expr, Operator, Stmt, Token, TokenKind, Unary};
+use crate::common::{self, Assign, Binary, Expr, Operator, Stmt, Token, TokenKind, Unary};
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -105,6 +105,27 @@ impl<'a> Parser<'a> {
 
     fn expression(&self) -> Result<Expr, ParseError> {
         self.equality()
+    }
+
+    fn assignment(&self) -> Result<Expr, ParseError> {
+        let expr = self.equality()?;
+
+        if self.match_kind(&[TokenKind::Equal]) {
+            let equals = self.previous();
+            let value = Some(Box::new(self.assignment()?));
+
+            if let Expr::Variable(tok) = expr {
+                let name = tok;
+                return Ok(Expr::Assign(Assign { name, value }));
+            }
+
+            return Err(ParseError::UserError {
+                token: equals,
+                message: String::from("Invalid assignment target"),
+            });
+        }
+
+        Ok(expr)
     }
 
     fn equality(&self) -> Result<Expr, ParseError> {
