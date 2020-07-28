@@ -304,8 +304,8 @@ impl Interpreter {
 
 pub type VisitorResult<'a> = Result<Output<'a, Value>, InterpreterError>;
 
-impl<'a> ExprVisitor<'a, VisitorResult<'a>> for Interpreter {
-    fn visit_expr(&self, expr: &Expr) -> VisitorResult {
+impl<'a> ExprVisitor<VisitorResult<'a>> for Interpreter {
+    fn visit_expr(&self, expr: &Expr) -> VisitorResult<'a> {
         match expr {
             Expr::Literal(_) => self.visit_literal(expr),
             Expr::Binary(_) => self.visit_binary(expr),
@@ -316,7 +316,7 @@ impl<'a> ExprVisitor<'a, VisitorResult<'a>> for Interpreter {
         }
     }
 
-    fn visit_binary(&self, expr: &Expr) -> VisitorResult {
+    fn visit_binary(&self, expr: &Expr) -> VisitorResult<'a> {
         if let Expr::Binary(bin) = expr {
             let left = self.visit_expr(&bin.left)?;
             let right = self.visit_expr(&bin.right)?;
@@ -346,7 +346,7 @@ impl<'a> ExprVisitor<'a, VisitorResult<'a>> for Interpreter {
         }
     }
 
-    fn visit_literal(&self, expr: &Expr) -> VisitorResult {
+    fn visit_literal(&self, expr: &Expr) -> VisitorResult<'a> {
         if let Expr::Literal(e) = expr {
             Ok(Output::Val(e.try_into()?))
         } else {
@@ -356,7 +356,7 @@ impl<'a> ExprVisitor<'a, VisitorResult<'a>> for Interpreter {
         }
     }
 
-    fn visit_unary(&self, expr: &Expr) -> VisitorResult {
+    fn visit_unary(&self, expr: &Expr) -> VisitorResult<'a> {
         if let Expr::Unary(e) = expr {
             let literal = self.visit_literal(&e.right)?;
             match e.operator.kind {
@@ -373,7 +373,7 @@ impl<'a> ExprVisitor<'a, VisitorResult<'a>> for Interpreter {
         }
     }
 
-    fn visit_group(&self, expr: &Expr) -> VisitorResult {
+    fn visit_group(&self, expr: &Expr) -> VisitorResult<'a> {
         if let Expr::Group(e) = expr {
             self.visit_expr(e)
         } else {
@@ -383,7 +383,7 @@ impl<'a> ExprVisitor<'a, VisitorResult<'a>> for Interpreter {
         }
     }
 
-    fn visit_var(&self, expr: &Expr) -> VisitorResult {
+    fn visit_var(&self, expr: &Expr) -> VisitorResult<'a> {
         if let Expr::Variable(var) = expr {
             self.env
                 .get(var.lexeme.as_str())
@@ -398,7 +398,7 @@ impl<'a> ExprVisitor<'a, VisitorResult<'a>> for Interpreter {
         }
     }
 
-    fn visit_assign(&self, expr: &Expr) -> VisitorResult {
+    fn visit_assign(&self, expr: &Expr) -> VisitorResult<'a> {
         if let Expr::Assign(e) = expr {
             let value = self.visit_expr(&e.value)?;
 

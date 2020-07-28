@@ -4,14 +4,14 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-pub trait ExprVisitor<'a, T, E> {
-    fn visit_expr(&self, expr: &Expr) -> Result<T<'a>, E>;
-    fn visit_binary(&self, expr: &Expr) -> Result<T<'a>, E>;
-    fn visit_literal(&self, expr: &Expr) -> Result<T<'a>, E>;
-    fn visit_unary(&self, expr: &Expr) -> Result<T<'a>, E>;
-    fn visit_group(&self, expr: &Expr) -> Result<T<'a>, E>;
-    fn visit_var(&self, expr: &Expr) -> Result<T<'a>, E>;
-    fn visit_assign(&self, expr: &Expr) -> Result<T<'a>, E>;
+pub trait ExprVisitor<O> {
+    fn visit_expr(&self, expr: &Expr) -> O;
+    fn visit_binary(&self, expr: &Expr) -> O;
+    fn visit_literal(&self, expr: &Expr) -> O;
+    fn visit_unary(&self, expr: &Expr) -> O;
+    fn visit_group(&self, expr: &Expr) -> O;
+    fn visit_var(&self, expr: &Expr) -> O;
+    fn visit_assign(&self, expr: &Expr) -> O;
 }
 
 pub trait StmtVisitor<O> {
