@@ -4,6 +4,7 @@ use std::{
 };
 
 mod common;
+mod environment;
 mod error;
 mod interpreter;
 mod parser;

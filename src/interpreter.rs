@@ -1,5 +1,6 @@
-use crate::common::{
-    EthNum, EthString, Expr, ExprVisitor, Stmt, StmtVisitor, Token, TokenKind, Value,
+use crate::{
+    common::{EthNum, EthString, Expr, ExprVisitor, Stmt, StmtVisitor, Token, TokenKind, Value},
+    environment::Environment,
 };
 
 use std::{
@@ -184,21 +185,21 @@ impl Display for Value {
 }
 
 #[derive(Debug)]
-pub enum Output<T> {
+pub enum Output<'a, T> {
     Val(T),
-    Ref(Rc<T>),
+    Ref(&'a T),
 }
 
-impl<T> Output<T> {
+impl<'a, T> Output<'a, T> {
     fn map_with<F, U>(self, other: Output<T>, f: F) -> U
     where
         F: FnOnce(&T, &T) -> U,
     {
         match (self, other) {
             (Output::Val(l), Output::Val(r)) => f(&l, &r),
-            (Output::Ref(l), Output::Ref(r)) => f(l.as_ref(), r.as_ref()),
-            (Output::Val(l), Output::Ref(r)) => f(&l, r.as_ref()),
-            (Output::Ref(l), Output::Val(r)) => f(l.as_ref(), &r),
+            (Output::Ref(l), Output::Ref(r)) => f(l, r),
+            (Output::Val(l), Output::Ref(r)) => f(&l, r),
+            (Output::Ref(l), Output::Val(r)) => f(l, &r),
         }
     }
 
@@ -208,24 +209,24 @@ impl<T> Output<T> {
     {
         match self {
             Output::Val(v) => f(&v),
-            Output::Ref(v) => f(v.as_ref()),
+            Output::Ref(v) => f(v),
         }
     }
 }
 
-impl<'a> From<Value> for Output<Value> {
+impl<'a> From<Value> for Output<'a, Value> {
     fn from(v: Value) -> Self {
         Output::Val(v)
     }
 }
 
-impl From<Rc<Value>> for Output<Value> {
-    fn from(v: Rc<Value>) -> Self {
+impl<'a> From<&'a Rc<Value>> for Output<'a, Value> {
+    fn from(v: &'a Rc<Value>) -> Self {
         Output::Ref(v)
     }
 }
 
-impl<T> Display for Output<T>
+impl<'a, T> Display for Output<'a, T>
 where
     T: Display,
 {
@@ -282,13 +283,13 @@ impl TryFrom<&Token> for Value {
 }
 
 pub struct Interpreter {
-    env: RefCell<HashMap<String, Rc<Value>>>,
+    env: Environment,
 }
 
 impl Interpreter {
     pub fn new() -> Self {
         Interpreter {
-            env: RefCell::new(HashMap::new()),
+            env: Environment::new(),
         }
     }
 
@@ -301,9 +302,9 @@ impl Interpreter {
     }
 }
 
-pub type VisitorResult = Result<Output<Value>, InterpreterError>;
+pub type VisitorResult<'a> = Result<Output<'a, Value>, InterpreterError>;
 
-impl ExprVisitor<VisitorResult> for Interpreter {
+impl<'a> ExprVisitor<'a, VisitorResult<'a>> for Interpreter {
     fn visit_expr(&self, expr: &Expr) -> VisitorResult {
         match expr {
             Expr::Literal(_) => self.visit_literal(expr),
@@ -311,6 +312,7 @@ impl ExprVisitor<VisitorResult> for Interpreter {
             Expr::Group(_) => self.visit_group(expr),
             Expr::Unary(_) => self.visit_unary(expr),
             Expr::Variable(_) => self.visit_var(expr),
+            Expr::Assign(_) => unimplemented!(),
         }
     }
 
@@ -383,15 +385,38 @@ impl ExprVisitor<VisitorResult> for Interpreter {
 
     fn visit_var(&self, expr: &Expr) -> VisitorResult {
         if let Expr::Variable(var) = expr {
-            dbg!(var.lexeme.as_str());
-            dbg!(&self.env);
             self.env
-                .borrow()
                 .get(var.lexeme.as_str())
                 .map(|v| v.clone().into())
                 .ok_or(InterpreterError::UndefinedVar {
                     name: var.lexeme.clone(),
                 })
+        } else {
+            Err(InterpreterError::Argument {
+                literal: format!("{:?}", expr),
+            })
+        }
+    }
+
+    fn visit_assign(&self, expr: &Expr) -> VisitorResult {
+        if let Expr::Assign(e) = expr {
+            let value = self.visit_expr(&e.value)?;
+
+            if let Output::Val(val) = value {
+                self.env.assign(e.name.lexeme.clone(), val).ok_or(
+                    InterpreterError::UndefinedVar {
+                        name: e.name.lexeme.clone(),
+                    },
+                )?;
+
+                self.env.get(&e.name.lexeme).map(|v| v.into()).ok_or(
+                    InterpreterError::UndefinedVar {
+                        name: e.name.lexeme.clone(),
+                    },
+                )
+            } else {
+                panic!("Trying to assign an already assigned varaible")
+            }
         } else {
             Err(InterpreterError::Argument {
                 literal: format!("{:?}", expr),
@@ -441,14 +466,9 @@ impl StmtVisitor<StmtResult> for Interpreter {
             if let Some(e) = &var.init {
                 let value = self.visit_expr(&e)?;
                 match value {
-                    Output::Val(v) => self
-                        .env
-                        .borrow_mut()
-                        .insert(var.name.lexeme.clone(), Rc::new(v)),
+                    Output::Val(v) => self.env.define(var.name.lexeme.clone(), v),
                     Output::Ref(_) => panic!("Trying to re-insert an inserted value"),
                 };
-
-                dbg!(&self.env.borrow().len());
             }
         } else {
             return Err(InterpreterError::Argument {

@@ -112,7 +112,7 @@ impl<'a> Parser<'a> {
 
         if self.match_kind(&[TokenKind::Equal]) {
             let equals = self.previous();
-            let value = Some(Box::new(self.assignment()?));
+            let value = Box::new(self.assignment()?);
 
             if let Expr::Variable(tok) = expr {
                 let name = tok;
