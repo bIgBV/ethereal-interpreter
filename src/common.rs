@@ -47,7 +47,7 @@ pub struct Variable {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Assign {
     pub name: Token,
-    pub value: Option<Box<Expr>>,
+    pub value: Box<Expr>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

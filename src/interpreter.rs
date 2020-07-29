@@ -185,21 +185,21 @@ impl Display for Value {
 }
 
 #[derive(Debug)]
-pub enum Output<'a, T> {
+pub enum Output<T> {
     Val(T),
-    Ref(&'a T),
+    Ref(Rc<T>),
 }
 
-impl<'a, T> Output<'a, T> {
+impl<T> Output<T> {
     fn map_with<F, U>(self, other: Output<T>, f: F) -> U
     where
         F: FnOnce(&T, &T) -> U,
     {
         match (self, other) {
             (Output::Val(l), Output::Val(r)) => f(&l, &r),
-            (Output::Ref(l), Output::Ref(r)) => f(l, r),
-            (Output::Val(l), Output::Ref(r)) => f(&l, r),
-            (Output::Ref(l), Output::Val(r)) => f(l, &r),
+            (Output::Ref(l), Output::Ref(r)) => f(l.as_ref(), r.as_ref()),
+            (Output::Val(l), Output::Ref(r)) => f(&l, r.as_ref()),
+            (Output::Ref(l), Output::Val(r)) => f(l.as_ref(), &r),
         }
     }
 
@@ -209,24 +209,24 @@ impl<'a, T> Output<'a, T> {
     {
         match self {
             Output::Val(v) => f(&v),
-            Output::Ref(v) => f(v),
+            Output::Ref(v) => f(v.as_ref()),
         }
     }
 }
 
-impl<'a> From<Value> for Output<'a, Value> {
+impl From<Value> for Output<Value> {
     fn from(v: Value) -> Self {
         Output::Val(v)
     }
 }
 
-impl<'a> From<&'a Rc<Value>> for Output<'a, Value> {
-    fn from(v: &'a Rc<Value>) -> Self {
+impl From<Rc<Value>> for Output<Value> {
+    fn from(v: Rc<Value>) -> Self {
         Output::Ref(v)
     }
 }
 
-impl<'a, T> Display for Output<'a, T>
+impl<T> Display for Output<T>
 where
     T: Display,
 {
@@ -302,21 +302,21 @@ impl Interpreter {
     }
 }
 
-pub type VisitorResult<'a> = Result<Output<'a, Value>, InterpreterError>;
+pub type VisitorResult = Result<Output<Value>, InterpreterError>;
 
-impl<'a> ExprVisitor<VisitorResult<'a>> for Interpreter {
-    fn visit_expr(&self, expr: &Expr) -> VisitorResult<'a> {
+impl<'a> ExprVisitor<VisitorResult> for Interpreter {
+    fn visit_expr(&self, expr: &Expr) -> VisitorResult {
         match expr {
             Expr::Literal(_) => self.visit_literal(expr),
             Expr::Binary(_) => self.visit_binary(expr),
             Expr::Group(_) => self.visit_group(expr),
             Expr::Unary(_) => self.visit_unary(expr),
             Expr::Variable(_) => self.visit_var(expr),
-            Expr::Assign(_) => unimplemented!(),
+            Expr::Assign(_) => self.visit_assign(expr),
         }
     }
 
-    fn visit_binary(&self, expr: &Expr) -> VisitorResult<'a> {
+    fn visit_binary(&self, expr: &Expr) -> VisitorResult {
         if let Expr::Binary(bin) = expr {
             let left = self.visit_expr(&bin.left)?;
             let right = self.visit_expr(&bin.right)?;
@@ -346,7 +346,7 @@ impl<'a> ExprVisitor<VisitorResult<'a>> for Interpreter {
         }
     }
 
-    fn visit_literal(&self, expr: &Expr) -> VisitorResult<'a> {
+    fn visit_literal(&self, expr: &Expr) -> VisitorResult {
         if let Expr::Literal(e) = expr {
             Ok(Output::Val(e.try_into()?))
         } else {
@@ -356,7 +356,7 @@ impl<'a> ExprVisitor<VisitorResult<'a>> for Interpreter {
         }
     }
 
-    fn visit_unary(&self, expr: &Expr) -> VisitorResult<'a> {
+    fn visit_unary(&self, expr: &Expr) -> VisitorResult {
         if let Expr::Unary(e) = expr {
             let literal = self.visit_literal(&e.right)?;
             match e.operator.kind {
@@ -373,7 +373,7 @@ impl<'a> ExprVisitor<VisitorResult<'a>> for Interpreter {
         }
     }
 
-    fn visit_group(&self, expr: &Expr) -> VisitorResult<'a> {
+    fn visit_group(&self, expr: &Expr) -> VisitorResult {
         if let Expr::Group(e) = expr {
             self.visit_expr(e)
         } else {
@@ -383,7 +383,7 @@ impl<'a> ExprVisitor<VisitorResult<'a>> for Interpreter {
         }
     }
 
-    fn visit_var(&self, expr: &Expr) -> VisitorResult<'a> {
+    fn visit_var(&self, expr: &Expr) -> VisitorResult {
         if let Expr::Variable(var) = expr {
             self.env
                 .get(var.lexeme.as_str())
@@ -398,7 +398,7 @@ impl<'a> ExprVisitor<VisitorResult<'a>> for Interpreter {
         }
     }
 
-    fn visit_assign(&self, expr: &Expr) -> VisitorResult<'a> {
+    fn visit_assign(&self, expr: &Expr) -> VisitorResult {
         if let Expr::Assign(e) = expr {
             let value = self.visit_expr(&e.value)?;
 
@@ -409,7 +409,7 @@ impl<'a> ExprVisitor<VisitorResult<'a>> for Interpreter {
                     },
                 )?;
 
-                self.env.get(&e.name.lexeme).map(|v| v.into()).ok_or(
+                self.env.get(&e.name.lexeme).map(|v| v.clone().into()).ok_or(
                     InterpreterError::UndefinedVar {
                         name: e.name.lexeme.clone(),
                     },
