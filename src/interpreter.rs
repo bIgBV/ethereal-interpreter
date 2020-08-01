@@ -1,3 +1,5 @@
+use anyhow::Error;
+
 use crate::{
     common::{EthNum, EthString, Expr, ExprVisitor, Stmt, StmtVisitor, Token, TokenKind, Value},
     environment::Environment,
@@ -284,16 +286,19 @@ impl TryFrom<&Token> for Value {
 
 pub struct Interpreter {
     env: Environment,
+    current: RefCell<usize>,
 }
 
 impl Interpreter {
     pub fn new() -> Self {
+        let (env, current) = Environment::new();
         Interpreter {
-            env: Environment::new(),
+            env,
+            current: RefCell::new(current),
         }
     }
 
-    pub fn interpret(&self, stmts: &[Stmt]) -> Result<(), InterpreterError> {
+    pub fn interpret(&self, stmts: &[Stmt]) -> Result<(), Error> {
         for stmt in stmts {
             self.visit_stmt(stmt)?;
         }
@@ -302,9 +307,9 @@ impl Interpreter {
     }
 }
 
-pub type VisitorResult = Result<Output<Value>, InterpreterError>;
+pub type VisitorResult = Result<Output<Value>, Error>;
 
-impl<'a> ExprVisitor<VisitorResult> for Interpreter {
+impl ExprVisitor<VisitorResult> for Interpreter {
     fn visit_expr(&self, expr: &Expr) -> VisitorResult {
         match expr {
             Expr::Literal(_) => self.visit_literal(expr),
@@ -337,12 +342,14 @@ impl<'a> ExprVisitor<VisitorResult> for Interpreter {
                 }
                 _ => Err(InterpreterError::Argument {
                     literal: format!("{}", bin.operator.0),
-                }),
+                }
+                .into()),
             }
         } else {
             Err(InterpreterError::Argument {
                 literal: format!("{:?}", expr),
-            })
+            }
+            .into())
         }
     }
 
@@ -352,7 +359,8 @@ impl<'a> ExprVisitor<VisitorResult> for Interpreter {
         } else {
             Err(InterpreterError::Argument {
                 literal: format!("{:?}", expr),
-            })
+            }
+            .into())
         }
     }
 
@@ -364,12 +372,14 @@ impl<'a> ExprVisitor<VisitorResult> for Interpreter {
                 TokenKind::Bang => Ok(literal.map(|v| Value::Bool(!is_truthy(&v))).into()),
                 _ => Err(InterpreterError::Argument {
                     literal: format!("{}", e.operator),
-                }),
+                }
+                .into()),
             }
         } else {
             Err(InterpreterError::Argument {
                 literal: format!("{:?}", expr),
-            })
+            }
+            .into())
         }
     }
 
@@ -379,22 +389,22 @@ impl<'a> ExprVisitor<VisitorResult> for Interpreter {
         } else {
             Err(InterpreterError::Argument {
                 literal: format!("{:?}", expr),
-            })
+            }
+            .into())
         }
     }
 
     fn visit_var(&self, expr: &Expr) -> VisitorResult {
         if let Expr::Variable(var) = expr {
             self.env
-                .get(var.lexeme.as_str())
-                .map(|v| v.clone().into())
-                .ok_or(InterpreterError::UndefinedVar {
-                    name: var.lexeme.clone(),
-                })
+                .get(self.current.borrow().clone(), var.lexeme.as_str())
+                .map(|val| val.into())
+                .map_err(|e| e.into())
         } else {
             Err(InterpreterError::Argument {
                 literal: format!("{:?}", expr),
-            })
+            }
+            .into())
         }
     }
 
@@ -403,29 +413,26 @@ impl<'a> ExprVisitor<VisitorResult> for Interpreter {
             let value = self.visit_expr(&e.value)?;
 
             if let Output::Val(val) = value {
-                self.env.assign(e.name.lexeme.clone(), val).ok_or(
-                    InterpreterError::UndefinedVar {
-                        name: e.name.lexeme.clone(),
-                    },
-                )?;
+                self.env
+                    .assign(self.current.borrow().clone(), e.name.lexeme.clone(), val)?;
 
-                self.env.get(&e.name.lexeme).map(|v| v.clone().into()).ok_or(
-                    InterpreterError::UndefinedVar {
-                        name: e.name.lexeme.clone(),
-                    },
-                )
+                self.env
+                    .get(self.current.borrow().clone(), e.name.lexeme.as_str())
+                    .map(|val| val.into())
+                    .map_err(|e| e.into())
             } else {
                 panic!("Trying to assign an already assigned varaible")
             }
         } else {
             Err(InterpreterError::Argument {
                 literal: format!("{:?}", expr),
-            })
+            }
+            .into())
         }
     }
 }
 
-type StmtResult = Result<(), InterpreterError>;
+type StmtResult = Result<(), Error>;
 
 impl StmtVisitor<StmtResult> for Interpreter {
     fn visit_stmt(&self, stmt: &Stmt) -> StmtResult {
@@ -433,6 +440,7 @@ impl StmtVisitor<StmtResult> for Interpreter {
             Stmt::Expr(_) => self.visit_expr_stmt(stmt),
             Stmt::Print(_) => self.visit_print(stmt),
             Stmt::Var(_) => self.visit_var_stmt(stmt),
+            Stmt::Block(_) => self.visit_block_stmt(stmt),
         }
     }
 
@@ -442,7 +450,8 @@ impl StmtVisitor<StmtResult> for Interpreter {
         } else {
             return Err(InterpreterError::Argument {
                 literal: format!("{:?}", stmt),
-            });
+            }
+            .into());
         }
 
         Ok(())
@@ -455,7 +464,8 @@ impl StmtVisitor<StmtResult> for Interpreter {
         } else {
             return Err(InterpreterError::Argument {
                 literal: format!("{:?}", stmt),
-            });
+            }
+            .into());
         }
 
         Ok(())
@@ -466,14 +476,44 @@ impl StmtVisitor<StmtResult> for Interpreter {
             if let Some(e) = &var.init {
                 let value = self.visit_expr(&e)?;
                 match value {
-                    Output::Val(v) => self.env.define(var.name.lexeme.clone(), v),
+                    Output::Val(v) => {
+                        self.env
+                            .define(self.current.borrow().clone(), var.name.lexeme.clone(), v)
+                    }
                     Output::Ref(_) => panic!("Trying to re-insert an inserted value"),
                 };
             }
         } else {
             return Err(InterpreterError::Argument {
                 literal: format!("{:?}", stmt),
-            });
+            }
+            .into());
+        }
+
+        Ok(())
+    }
+
+    fn visit_block_stmt(&self, stmt: &Stmt) -> StmtResult {
+        if let Stmt::Block(stmts) = stmt {
+            // Store the current scope
+            let previous = self.current.borrow().clone();
+
+            // Instantiate and assign new scope
+            let new_scope = self.env.instantiate_new_scope();
+            *self.current.borrow_mut() = new_scope;
+
+            let result: StmtResult = {
+                for statement in stmts {
+                    self.visit_stmt(statement)?;
+                }
+
+                Ok(())
+            };
+
+            // restore previous scope
+            *self.current.borrow_mut() = previous;
+
+            return result;
         }
 
         Ok(())

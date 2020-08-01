@@ -81,6 +81,18 @@ impl<'a> Parser<'a> {
         }))
     }
 
+    fn block_statement(&self) -> Result<Stmt, ParseError> {
+        let mut stmts = vec![];
+
+        while !self.check(&TokenKind::RightBrace) && !self.is_at_end() {
+            stmts.push(self.declaration()?);
+        }
+
+        self.consume(&TokenKind::RightBrace, "Expected '}' after block");
+
+        Ok(Stmt::Block(stmts))
+    }
+
     fn print_statement(&self) -> Result<Stmt, ParseError> {
         let expr = self.expression()?;
         self.consume(&TokenKind::Semicolon, "Expected ';' after expression")?;
@@ -98,6 +110,10 @@ impl<'a> Parser<'a> {
     fn statement(&self) -> Result<Stmt, ParseError> {
         if self.match_kind(&[TokenKind::Print]) {
             return self.print_statement();
+        }
+
+        if self.match_kind(&[TokenKind::LeftBrace]) {
+            return self.block_statement();
         }
 
         self.expresion_statement()

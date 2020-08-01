@@ -10,6 +10,7 @@ version = "0.1.0"
 once_cell = "0.1.8"
 thiserror = "1.0.20"
 dashmap = "3.11.7"
+anyhow = "1"
 
 [dev-dependencies]
 pretty_assertions = "0.6.1"

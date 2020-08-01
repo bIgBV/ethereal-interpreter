@@ -19,6 +19,7 @@ pub trait StmtVisitor<O> {
     fn visit_print(&self, stmt: &Stmt) -> O;
     fn visit_expr_stmt(&self, stmt: &Stmt) -> O;
     fn visit_var_stmt(&self, stmt: &Stmt) -> O;
+    fn visit_block_stmt(&self, stmt: &Stmt) -> O;
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -36,6 +37,7 @@ pub enum Stmt {
     Expr(Expr),
     Print(Expr),
     Var(Variable),
+    Block(Vec<Stmt>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
