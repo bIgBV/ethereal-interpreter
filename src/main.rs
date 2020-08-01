@@ -1,5 +1,5 @@
 use std::{
-    env,
+    env, fs,
     io::{self, stdin, BufRead, Write},
 };
 
@@ -29,24 +29,28 @@ impl State {
     }
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
     let state = State::new();
 
-    if dbg!(dbg!(args.len()) > 1) {
-        println!("Usage: jlox [script]");
+    if args.len() < 2 {
+        println!("Usage: eth [script]");
     } else if args.len() == 2 {
-        // match run(&args[1], &mut state.interpreter) {
-        //     Ok(_) => (),
-        //     Err(e) => panic!("{}", e),
-        // };
+        run_file(&args[1], state)?;
     } else {
-        run_prompt(state);
+        run_prompt(state)?;
     }
-    println!("Hello, world!");
+    Ok(())
 }
 
-fn run_prompt(mut state: State) {
+fn run_file(path: &str, mut state: State) -> Result<(), Box<dyn std::error::Error>> {
+    let content = fs::read_to_string(path).expect("unable to read file");
+    run(content, &mut state.interpreter)?;
+
+    Ok(())
+}
+
+fn run_prompt(mut state: State) -> Result<(), Box<dyn std::error::Error>> {
     let stdin = stdin();
     let mut reader = stdin.lock();
     let mut buffer = state.source;
@@ -59,10 +63,7 @@ fn run_prompt(mut state: State) {
         reader
             .read_line(&mut buffer)
             .expect("Unable to read to string");
-        match run(&buffer, &mut state.interpreter) {
-            Ok(_) => (),
-            Err(e) => println!("{}", e),
-        };
+        run(&buffer, &mut state.interpreter)?;
         buffer.clear();
     }
 }
