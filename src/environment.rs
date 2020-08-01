@@ -10,17 +10,10 @@ struct EnvCell {
 }
 
 impl EnvCell {
-    pub fn new() -> Self {
+    pub fn new(enclosing: Option<usize>) -> Self {
         Self {
             cell: RefCell::new(HashMap::new()),
-            enclosing: None,
-        }
-    }
-
-    pub fn new_cell(&self, enclosing: usize) -> Self {
-        Self {
-            cell: RefCell::new(HashMap::new()),
-            enclosing: Some(enclosing),
+            enclosing,
         }
     }
 
@@ -53,7 +46,7 @@ impl Environment {
             values: RefCell::new(Vec::new()),
         };
 
-        let scope = env.instantiate_new_scope();
+        let scope = env.instantiate_new_scope(None);
 
         (env, scope)
     }
@@ -98,8 +91,8 @@ impl Environment {
         })
     }
 
-    pub fn instantiate_new_scope(&self) -> usize {
-        self.values.borrow_mut().push(EnvCell::new());
+    pub fn instantiate_new_scope(&self, enclosing: Option<usize>) -> usize {
+        self.values.borrow_mut().push(EnvCell::new(enclosing));
         self.values.borrow_mut().len() - 1
     }
 }

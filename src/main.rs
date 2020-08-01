@@ -74,8 +74,6 @@ fn run<T: AsRef<str>>(
     let mut scanner = Scanner::new(path.as_ref());
     let parser = Parser::new(scanner.scan_tokens());
 
-    dbg!(path.as_ref());
-
     let (stmts, errs) = parser.parse();
 
     if errs.len() > 0 {

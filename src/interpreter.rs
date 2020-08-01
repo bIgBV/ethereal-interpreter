@@ -8,7 +8,6 @@ use crate::{
 use std::{
     cell::RefCell,
     cmp::{Ordering, PartialEq, PartialOrd},
-    collections::HashMap,
     convert::{TryFrom, TryInto},
     fmt::{self, Display},
     ops::{Add, Div, Mul, Neg, Not, Sub},
@@ -499,7 +498,7 @@ impl StmtVisitor<StmtResult> for Interpreter {
             let previous = self.current.borrow().clone();
 
             // Instantiate and assign new scope
-            let new_scope = self.env.instantiate_new_scope();
+            let new_scope = self.env.instantiate_new_scope(Some(previous));
             *self.current.borrow_mut() = new_scope;
 
             let result: StmtResult = {

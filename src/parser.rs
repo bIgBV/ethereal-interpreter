@@ -8,8 +8,6 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 pub enum ParseError<'a> {
     #[error("Reached end of file")]
     EOF,
-    #[error("Unknown error occurred")]
-    Unknown,
 
     #[error("Error occurred at{token} , {message}")]
     UserError { token: &'a Token, message: String },
@@ -88,7 +86,7 @@ impl<'a> Parser<'a> {
             stmts.push(self.declaration()?);
         }
 
-        self.consume(&TokenKind::RightBrace, "Expected '}' after block");
+        self.consume(&TokenKind::RightBrace, "Expected '}' after block")?;
 
         Ok(Stmt::Block(stmts))
     }
@@ -120,7 +118,7 @@ impl<'a> Parser<'a> {
     }
 
     fn expression(&self) -> Result<Expr, ParseError> {
-        self.equality()
+        self.assignment()
     }
 
     fn assignment(&self) -> Result<Expr, ParseError> {
