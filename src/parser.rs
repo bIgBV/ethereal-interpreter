@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::common::{self, Assign, Binary, Expr, Operator, Stmt, Token, TokenKind, Unary};
+use crate::common::{self, Assign, Binary, Expr, If, Operator, Stmt, Token, TokenKind, Unary, Logical, While};
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -105,9 +105,50 @@ impl<'a> Parser<'a> {
         Ok(Stmt::Expr(expr))
     }
 
+    fn if_statement(&self) -> Result<Stmt, ParseError> {
+        self.consume(&TokenKind::LeftParen, "Expected '(' after 'if'")?;
+        let cond = self.expression()?;
+        self.consume(&TokenKind::RightParen, "Expected ')' after if condition")?;
+
+        let then = self.statement()?;
+
+        let mut unless = None;
+
+        if self.match_kind(&[TokenKind::Else]) {
+            unless = Some(self.statement()?);
+        }
+
+        Ok(Stmt::If(If {
+            cond,
+            then: Box::new(then),
+            unless: Box::new(unless),
+        }))
+    }
+
+    fn while_statement(&self) -> Result<Stmt, ParseError> {
+        self.consume(&TokenKind::LeftParen, "Expected '(' after 'while'")?;
+        let cond = self.expression()?;
+        self.consume(&TokenKind::RightParen, "Expected ')' after 'while'")?;
+
+        let body = self.statement()?;
+
+        Ok(Stmt::While(While {
+            cond,
+            body: Box::new(body)
+        }))
+    }
+
     fn statement(&self) -> Result<Stmt, ParseError> {
+        if self.match_kind(&[TokenKind::If]) {
+            return self.if_statement();
+        }
+
         if self.match_kind(&[TokenKind::Print]) {
             return self.print_statement();
+        }
+
+        if self.match_kind(&[TokenKind::While]) {
+            return self.while_statement();
         }
 
         if self.match_kind(&[TokenKind::LeftBrace]) {
@@ -122,7 +163,7 @@ impl<'a> Parser<'a> {
     }
 
     fn assignment(&self) -> Result<Expr, ParseError> {
-        let expr = self.equality()?;
+        let expr = self.or()?;
 
         if self.match_kind(&[TokenKind::Equal]) {
             let equals = self.previous();
@@ -140,6 +181,40 @@ impl<'a> Parser<'a> {
         }
 
         Ok(expr)
+    }
+
+    fn or(&self) -> Result<Expr, ParseError> {
+        let mut expr = self.and();
+
+        while self.match_kind(&[TokenKind::Or]) {
+            let operator = self.previous();
+            let right = self.and()?;
+
+            expr = Ok(Expr::Logical(Logical {
+                left: Box::new(expr?),
+                operator: Operator(operator.clone()),
+                right: Box::new(right),
+            }));
+        }
+
+        expr
+    }
+
+    fn and(&self) -> Result<Expr, ParseError> {
+        let mut expr = self.equality();
+
+        while self.match_kind(&[TokenKind::And]) {
+            let operator = self.previous();
+            let right = self.equality()?;
+
+            expr = Ok(Expr::Logical(Logical {
+                left: Box::new(expr?),
+                operator: Operator(operator.clone()),
+                right: Box::new(right),
+            }));
+        }
+
+        expr
     }
 
     fn equality(&self) -> Result<Expr, ParseError> {

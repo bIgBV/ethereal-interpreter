@@ -95,4 +95,8 @@ impl Environment {
         self.values.borrow_mut().push(EnvCell::new(enclosing));
         self.values.borrow_mut().len() - 1
     }
+
+    pub fn drop_scope(&self, scope: usize) {
+        self.values.borrow_mut().remove(scope);
+    }
 }

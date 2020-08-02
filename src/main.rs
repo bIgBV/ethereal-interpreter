@@ -44,7 +44,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn run_file(path: &str, mut state: State) -> Result<(), Box<dyn std::error::Error>> {
-    let content = fs::read_to_string(path).expect("unable to read file");
+    let content = fs::read_to_string(path)?;
     run(content, &mut state.interpreter)?;
 
     Ok(())

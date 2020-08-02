@@ -5,21 +5,45 @@ use std::{
 };
 
 pub trait ExprVisitor<O> {
-    fn visit_expr(&self, expr: &Expr) -> O;
+    fn visit_expr(&self, expr: &Expr) -> O {
+        match expr {
+            Expr::Literal(_) => self.visit_literal(expr),
+            Expr::Binary(_) => self.visit_binary(expr),
+            Expr::Group(_) => self.visit_group(expr),
+            Expr::Unary(_) => self.visit_unary(expr),
+            Expr::Variable(_) => self.visit_var(expr),
+            Expr::Assign(_) => self.visit_assign(expr),
+            Expr::Logical(_) => self.visit_logical(expr)
+        }
+    }
+
     fn visit_binary(&self, expr: &Expr) -> O;
     fn visit_literal(&self, expr: &Expr) -> O;
     fn visit_unary(&self, expr: &Expr) -> O;
     fn visit_group(&self, expr: &Expr) -> O;
     fn visit_var(&self, expr: &Expr) -> O;
     fn visit_assign(&self, expr: &Expr) -> O;
+    fn visit_logical(&self, expr: &Expr) -> O;
 }
 
 pub trait StmtVisitor<O> {
-    fn visit_stmt(&self, stmt: &Stmt) -> O;
+    fn visit_stmt(&self, stmt: &Stmt) -> O {
+        match *stmt {
+            Stmt::Expr(_) => self.visit_expr_stmt(stmt),
+            Stmt::Print(_) => self.visit_print(stmt),
+            Stmt::Var(_) => self.visit_var_stmt(stmt),
+            Stmt::Block(_) => self.visit_block_stmt(stmt),
+            Stmt::If(_) => self.visit_if_stmt(stmt),
+            Stmt::While(_) => self.visit_while_stmt(stmt)
+        }
+    }
+
     fn visit_print(&self, stmt: &Stmt) -> O;
     fn visit_expr_stmt(&self, stmt: &Stmt) -> O;
     fn visit_var_stmt(&self, stmt: &Stmt) -> O;
     fn visit_block_stmt(&self, stmt: &Stmt) -> O;
+    fn visit_if_stmt(&self, stmt: &Stmt) -> O;
+    fn visit_while_stmt(&self, stmt: &Stmt) -> O;
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -30,6 +54,7 @@ pub enum Expr {
     Unary(Unary),
     Variable(Token),
     Assign(Assign),
+    Logical(Logical),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -38,6 +63,21 @@ pub enum Stmt {
     Print(Expr),
     Var(Variable),
     Block(Vec<Stmt>),
+    If(If),
+    While(While)
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct If {
+    pub cond: Expr,
+    pub then: Box<Stmt>,
+    pub unless: Box<Option<Stmt>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct While {
+    pub cond: Expr,
+    pub body: Box<Stmt>
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -60,6 +100,13 @@ pub struct Unary {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Binary {
+    pub left: Box<Expr>,
+    pub operator: Operator,
+    pub right: Box<Expr>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Logical {
     pub left: Box<Expr>,
     pub operator: Operator,
     pub right: Box<Expr>,

@@ -213,6 +213,13 @@ impl<T> Output<T> {
             Output::Ref(v) => f(v.as_ref()),
         }
     }
+
+    fn as_ref(&self) -> &T {
+        match self {
+            Output::Val(v) => &v,
+            Output::Ref(rc) => rc.as_ref(),
+        }
+    }
 }
 
 impl From<Value> for Output<Value> {
@@ -309,17 +316,6 @@ impl Interpreter {
 pub type VisitorResult = Result<Output<Value>, Error>;
 
 impl ExprVisitor<VisitorResult> for Interpreter {
-    fn visit_expr(&self, expr: &Expr) -> VisitorResult {
-        match expr {
-            Expr::Literal(_) => self.visit_literal(expr),
-            Expr::Binary(_) => self.visit_binary(expr),
-            Expr::Group(_) => self.visit_group(expr),
-            Expr::Unary(_) => self.visit_unary(expr),
-            Expr::Variable(_) => self.visit_var(expr),
-            Expr::Assign(_) => self.visit_assign(expr),
-        }
-    }
-
     fn visit_binary(&self, expr: &Expr) -> VisitorResult {
         if let Expr::Binary(bin) = expr {
             let left = self.visit_expr(&bin.left)?;
@@ -429,20 +425,34 @@ impl ExprVisitor<VisitorResult> for Interpreter {
             .into())
         }
     }
+
+    fn visit_logical(&self, expr: &Expr) -> VisitorResult {
+        if let Expr::Logical(logical) = expr {
+            let left = self.visit_expr(&logical.left)?;
+
+            if logical.operator.0.kind == TokenKind::Or {
+                if is_truthy(left.as_ref()) {
+                    return Ok(left);
+                }
+            } else {
+                if !is_truthy(left.as_ref()) {
+                    return Ok(left);
+                }
+            }
+
+            self.visit_expr(&logical.right)
+        }else {
+            Err(InterpreterError::Argument {
+                literal: format!("{:?}", expr),
+            }
+            .into())
+        }
+    }
 }
 
 type StmtResult = Result<(), Error>;
 
 impl StmtVisitor<StmtResult> for Interpreter {
-    fn visit_stmt(&self, stmt: &Stmt) -> StmtResult {
-        match *stmt {
-            Stmt::Expr(_) => self.visit_expr_stmt(stmt),
-            Stmt::Print(_) => self.visit_print(stmt),
-            Stmt::Var(_) => self.visit_var_stmt(stmt),
-            Stmt::Block(_) => self.visit_block_stmt(stmt),
-        }
-    }
-
     fn visit_expr_stmt(&self, stmt: &Stmt) -> StmtResult {
         if let Stmt::Expr(e) = stmt {
             self.visit_expr(e)?;
@@ -509,10 +519,46 @@ impl StmtVisitor<StmtResult> for Interpreter {
                 Ok(())
             };
 
+            self.env.drop_scope(self.current.borrow().clone());
+
             // restore previous scope
             *self.current.borrow_mut() = previous;
 
             return result;
+        }
+
+        Ok(())
+    }
+
+    fn visit_if_stmt(&self, stmt: &Stmt) -> StmtResult {
+        if let Stmt::If(if_stmt) = stmt {
+            if is_truthy(self.visit_expr(&if_stmt.cond)?.as_ref()) {
+                return self.visit_stmt(&if_stmt.then);
+            }
+
+            if let Some(unless) = &*if_stmt.unless {
+                return self.visit_stmt(&unless);
+            }
+        } else {
+            return Err(InterpreterError::Argument {
+                literal: format!("{:?}", stmt),
+            }
+            .into());
+        }
+
+        Ok(())
+    }
+
+    fn visit_while_stmt(&self, stmt: &Stmt) -> StmtResult {
+        if let Stmt::While(while_stmt) = stmt {
+            while is_truthy(self.visit_expr(&while_stmt.cond)?.as_ref()) {
+                self.visit_stmt(&while_stmt.body);
+            }
+        }else {
+            return Err(InterpreterError::Argument {
+                literal: format!("{:?}", stmt),
+            }
+            .into());
         }
 
         Ok(())
