@@ -8,7 +8,7 @@ use crate::{
 use std::{
     cell::RefCell,
     cmp::{Ordering, PartialEq, PartialOrd},
-    convert::{TryFrom, TryInto},
+    convert::{AsRef, TryFrom, TryInto},
     fmt::{self, Display},
     ops::{Add, Div, Mul, Neg, Not, Sub},
     rc::Rc,
@@ -213,7 +213,9 @@ impl<T> Output<T> {
             Output::Ref(v) => f(v.as_ref()),
         }
     }
+}
 
+impl<T> AsRef<T> for Output<T> {
     fn as_ref(&self) -> &T {
         match self {
             Output::Val(v) => &v,

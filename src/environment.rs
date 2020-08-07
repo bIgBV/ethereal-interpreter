@@ -1,32 +1,40 @@
 use thiserror::Error;
 
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, marker::PhantomData, rc::Rc};
 
-use crate::common::Value;
+use crate::{common::Value, interpreter::Output};
 
-struct EnvCell {
-    cell: RefCell<HashMap<String, Rc<Value>>>,
+struct EnvCell<T, U>
+where
+    T: AsRef<U>,
+{
+    cell: RefCell<HashMap<String, T>>,
     pub enclosing: Option<usize>,
+    _marker: PhantomData<U>,
 }
 
-impl EnvCell {
+impl<T, U> EnvCell<T, U>
+where
+    T: AsRef<U>,
+{
     pub fn new(enclosing: Option<usize>) -> Self {
         Self {
             cell: RefCell::new(HashMap::new()),
             enclosing,
+            _marker: PhantomData,
         }
     }
 
-    pub fn get(&self, key: &str) -> Option<Rc<Value>> {
-        self.cell.borrow().get(key).map(|v| v.clone())
+    pub fn get(&self, key: &str) -> Option<&T> {
+        self.cell.borrow().get(key)
     }
 
     pub fn contains_key(&self, key: &str) -> bool {
         self.cell.borrow().contains_key(key)
     }
 
-    pub fn insert(&self, key: String, value: Value) {
-        self.cell.borrow_mut().insert(key, Rc::new(value));
+    pub fn insert(&self, key: String, value: T) {
+        self.cell.borrow_mut().insert(key, value);
     }
 }
 
@@ -37,7 +45,7 @@ pub enum EnvError {
 }
 
 pub struct Environment {
-    values: RefCell<Vec<EnvCell>>,
+    values: RefCell<Vec<EnvCell<Output<Value>, Value>>>,
 }
 
 impl Environment {
@@ -51,7 +59,7 @@ impl Environment {
         (env, scope)
     }
 
-    pub fn assign(&self, env: usize, name: String, value: Value) -> Result<(), EnvError> {
+    pub fn assign(&self, env: usize, name: String, value: Output<Value>) -> Result<(), EnvError> {
         if let Some(map) = self.values.borrow_mut().get(env) {
             if map.contains_key(&name) {
                 map.insert(name, value);
@@ -67,13 +75,13 @@ impl Environment {
         Err(EnvError::UndefinedVariable { name })
     }
 
-    pub fn define(&self, env: usize, name: String, value: Value) {
+    pub fn define(&self, env: usize, name: String, value: Output<Value>) {
         if let Some(map) = self.values.borrow().get(env) {
             map.insert(name, value);
         }
     }
 
-    pub fn get(&self, env: usize, name: &str) -> Result<Rc<Value>, EnvError> {
+    pub fn get(&self, env: usize, name: &str) -> Result<&Output<Value>, EnvError> {
         if let Some(map) = self.values.borrow().get(env) {
             if map.contains_key(name) {
                 return map.get(name).ok_or(EnvError::UndefinedVariable {

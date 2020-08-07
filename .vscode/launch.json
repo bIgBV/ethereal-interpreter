@@ -25,6 +25,26 @@
         {
             "type": "lldb",
             "request": "launch",
+            "name": "Debug interpreter with file",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=ethereal-interpreter",
+                    "--package=ethereal-interpreter"
+                ],
+                "filter": {
+                    "name": "ethereal-interpreter",
+                    "kind": "bin"
+                }
+            },
+            "args": [
+                "lox_scripts/control_flow.lox"
+            ],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
             "name": "Debug unit tests in executable 'ethereal-interpreter'",
             "cargo": {
                 "args": [
