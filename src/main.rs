@@ -33,12 +33,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
     let state = State::new();
 
-    if args.len() == 1 {
-        run_prompt(state)?;
+    if args.len() < 2 {
+        println!("Usage: eth [script]");
     } else if args.len() == 2 {
         run_file(&args[1], state)?;
     } else {
-        println!("Usage: eth [script]");
+        run_prompt(state)?;
     }
     Ok(())
 }
