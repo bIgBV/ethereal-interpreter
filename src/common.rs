@@ -13,7 +13,7 @@ pub trait ExprVisitor<O> {
             Expr::Unary(_) => self.visit_unary(expr),
             Expr::Variable(_) => self.visit_var(expr),
             Expr::Assign(_) => self.visit_assign(expr),
-            Expr::Logical(_) => self.visit_logical(expr)
+            Expr::Logical(_) => self.visit_logical(expr),
         }
     }
 
@@ -34,7 +34,7 @@ pub trait StmtVisitor<O> {
             Stmt::Var(_) => self.visit_var_stmt(stmt),
             Stmt::Block(_) => self.visit_block_stmt(stmt),
             Stmt::If(_) => self.visit_if_stmt(stmt),
-            Stmt::While(_) => self.visit_while_stmt(stmt)
+            Stmt::While(_) => self.visit_while_stmt(stmt),
         }
     }
 
@@ -64,7 +64,7 @@ pub enum Stmt {
     Var(Variable),
     Block(Vec<Stmt>),
     If(If),
-    While(While)
+    While(While),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -77,7 +77,7 @@ pub struct If {
 #[derive(Debug, Clone, PartialEq)]
 pub struct While {
     pub cond: Expr,
-    pub body: Box<Stmt>
+    pub body: Box<Stmt>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -207,13 +207,6 @@ impl TokenKind {
             | TokenKind::Nil
             | TokenKind::Number(_)
             | TokenKind::Str(_) => true,
-            _ => false,
-        }
-    }
-
-    pub fn is_literal(&self) -> bool {
-        match *self {
-            TokenKind::Number(_) | TokenKind::Str(_) | TokenKind::False | TokenKind::True => true,
             _ => false,
         }
     }

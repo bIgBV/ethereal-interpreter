@@ -272,7 +272,7 @@ impl TryFrom<&Token> for Value {
     type Error = InterpreterError;
 
     fn try_from(value: &Token) -> Result<Self, Self::Error> {
-        if value.kind.is_literal() {
+        if value.kind.is_primary() {
             match &value.kind {
                 // fuck it, let's just clone things.
                 TokenKind::Number(num) => Ok(Value::Num(num.clone())),
@@ -443,7 +443,7 @@ impl ExprVisitor<VisitorResult> for Interpreter {
             }
 
             self.visit_expr(&logical.right)
-        }else {
+        } else {
             Err(InterpreterError::Argument {
                 literal: format!("{:?}", expr),
             }
@@ -554,9 +554,9 @@ impl StmtVisitor<StmtResult> for Interpreter {
     fn visit_while_stmt(&self, stmt: &Stmt) -> StmtResult {
         if let Stmt::While(while_stmt) = stmt {
             while is_truthy(self.visit_expr(&while_stmt.cond)?.as_ref()) {
-                self.visit_stmt(&while_stmt.body);
+                self.visit_stmt(&while_stmt.body)?;
             }
-        }else {
+        } else {
             return Err(InterpreterError::Argument {
                 literal: format!("{:?}", stmt),
             }

@@ -1,6 +1,8 @@
 use thiserror::Error;
 
-use crate::common::{self, Assign, Binary, Expr, If, Operator, Stmt, Token, TokenKind, Unary, Logical, While};
+use crate::common::{
+    self, Assign, Binary, Expr, If, Logical, Operator, Stmt, Token, TokenKind, Unary, While,
+};
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -134,11 +136,73 @@ impl<'a> Parser<'a> {
 
         Ok(Stmt::While(While {
             cond,
-            body: Box::new(body)
+            body: Box::new(body),
         }))
     }
 
+    fn for_statement(&self) -> Result<Stmt, ParseError> {
+        self.consume(&TokenKind::LeftParen, "Expected '(' after for")?;
+
+        // First see if we have an initializer. It's the ; follows immediately after the
+        // ( we don't have an initializer. Else, it's either a variable declaration
+        // or an expression statement.
+        let init;
+        if self.match_kind(&[TokenKind::Semicolon]) {
+            init = None;
+        } else if self.match_kind(&[TokenKind::Var]) {
+            init = Some(self.variable_decl()?);
+        } else {
+            init = Some(self.expresion_statement()?);
+        }
+
+        // Similarly check for the condition
+        let mut cond = None;
+        if !self.check(&TokenKind::Semicolon) {
+            let expr_stmt = self.expresion_statement()?;
+            if let Stmt::Expr(expr) = expr_stmt {
+                cond = Some(expr);
+            }
+        }
+        self.consume(&TokenKind::Semicolon, "Expected ';' after condition")?;
+
+        // And finally the increment
+        let incr;
+        if self.check(&TokenKind::RightParen) {
+            incr = None;
+        } else {
+            incr = Some(self.expresion_statement()?);
+        }
+        self.consume(&TokenKind::RightParen, "Expected ')' after for clause")?;
+        let mut body = self.statement()?;
+
+        // Desugaring it bottom up, first if we have an increment, add it at the end of the block
+        if let Some(Stmt::Expr(inc)) = incr {
+            body = Stmt::Block(vec![body, Stmt::Expr(inc)]);
+        }
+
+        // Next if we don't have a condition, just make it a while true loop
+        if let None = cond {
+            cond = Some(Expr::Literal(Token::new(TokenKind::True, "true", 9999999)));
+        }
+
+        body = Stmt::While(While {
+            cond: cond.expect("condition should never be None"),
+            body: Box::new(body),
+        });
+
+        // Finally if we have an initializer, put it at the begenning of the block.
+        if let Some(init) = init {
+            body = Stmt::Block(vec![init, body]);
+        }
+
+        Ok(body)
+    }
+
     fn statement(&self) -> Result<Stmt, ParseError> {
+        if self.match_kind(&[TokenKind::For]) {
+            return self.for_statement();
+        }
+
         if self.match_kind(&[TokenKind::If]) {
             return self.if_statement();
         }
