@@ -409,17 +409,13 @@ impl ExprVisitor<VisitorResult> for Interpreter {
         if let Expr::Assign(e) = expr {
             let value = self.visit_expr(&e.value)?;
 
-            if let Output::Val(val) = value {
-                self.env
-                    .assign(self.current.borrow().clone(), e.name.lexeme.clone(), val)?;
+            self.env
+                .assign(self.current.borrow().clone(), e.name.lexeme.clone(), value)?;
 
-                self.env
-                    .get(self.current.borrow().clone(), e.name.lexeme.as_str())
-                    .map(|val| val.into())
-                    .map_err(|e| e.into())
-            } else {
-                panic!("Trying to assign an already assigned varaible")
-            }
+            self.env
+                .get(self.current.borrow().clone(), e.name.lexeme.as_str())
+                .map(|val| val.into())
+                .map_err(|e| e.into())
         } else {
             Err(InterpreterError::Argument {
                 literal: format!("{:?}", expr),
@@ -486,13 +482,11 @@ impl StmtVisitor<StmtResult> for Interpreter {
         if let Stmt::Var(var) = stmt {
             if let Some(e) = &var.init {
                 let value = self.visit_expr(&e)?;
-                match value {
-                    Output::Val(v) => {
-                        self.env
-                            .define(self.current.borrow().clone(), var.name.lexeme.clone(), v)
-                    }
-                    Output::Ref(_) => panic!("Trying to re-insert an inserted value"),
-                };
+                self.env.define(
+                    self.current.borrow().clone(),
+                    var.name.lexeme.clone(),
+                    value,
+                );
             }
         } else {
             return Err(InterpreterError::Argument {
@@ -509,9 +503,11 @@ impl StmtVisitor<StmtResult> for Interpreter {
             // Store the current scope
             let previous = self.current.borrow().clone();
 
-            // Instantiate and assign new scope
-            let new_scope = self.env.instantiate_new_scope(Some(previous));
-            *self.current.borrow_mut() = new_scope;
+            {
+                // Instantiate and assign new scope
+                let new_scope = self.env.instantiate_new_scope(Some(previous));
+                *self.current.borrow_mut() = new_scope;
+            }
 
             let result: StmtResult = {
                 for statement in stmts {
@@ -523,8 +519,10 @@ impl StmtVisitor<StmtResult> for Interpreter {
 
             self.env.drop_scope(self.current.borrow().clone());
 
-            // restore previous scope
-            *self.current.borrow_mut() = previous;
+            {
+                // restore previous scope
+                *self.current.borrow_mut() = previous;
+            }
 
             return result;
         }
