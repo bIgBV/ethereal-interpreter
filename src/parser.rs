@@ -1,7 +1,8 @@
 use thiserror::Error;
 
 use crate::common::{
-    self, Assign, Binary, Expr, If, Logical, Operator, Stmt, Token, TokenKind, Unary, While,
+    self, Assign, Binary, Call, Expr, Func, If, Logical, Operator, Stmt, Token, TokenKind, Unary,
+    While,
 };
 
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -45,7 +46,9 @@ impl<'a> Parser<'a> {
 
     fn declaration(&self) -> Result<Stmt, ParseError> {
         let result = {
-            if self.match_kind(&[TokenKind::Var]) {
+            if self.match_kind(&[TokenKind::Fun]) {
+                self.func_decl("function")
+            } else if self.match_kind(&[TokenKind::Var]) {
                 self.variable_decl()
             } else {
                 self.statement()
@@ -59,6 +62,54 @@ impl<'a> Parser<'a> {
                 Err(e)
             }
         }
+    }
+
+    fn func_decl(&self, kind: &'static str) -> Result<Stmt, ParseError> {
+        let name = self
+            .consume(
+                &TokenKind::Identifier,
+                format!("Expected {} name.", kind).as_str(),
+            )?
+            .lexeme
+            .clone();
+
+        self.consume(
+            &TokenKind::LeftParen,
+            format!("Expected '(' after {} name", kind).as_str(),
+        )?;
+
+        let mut params = vec![];
+
+        if !self.check(&TokenKind::RightParen) {
+            loop {
+                if params.len() >= 255 {
+                    return Err(ParseError::UserError {
+                        token: self.peek()?,
+                        message: format!("Cannot have more than 255 arguments"),
+                    });
+                }
+
+                params.push(
+                    self.consume(&TokenKind::Identifier, "Expected parameter name")?
+                        .lexeme
+                        .clone(),
+                );
+
+                if !self.match_kind(&[TokenKind::Comma]) {
+                    break;
+                }
+            }
+        }
+
+        self.consume(&TokenKind::RightParen, "Expected ')' after parameters")?;
+        self.consume(
+            &TokenKind::LeftBrace,
+            format!("Expected '{{' before {} body.", kind).as_str(),
+        )?;
+
+        let body = Box::new(self.block_statement()?);
+
+        Ok(Stmt::Func(Func { name, params, body }))
     }
 
     fn variable_decl(&self) -> Result<Stmt, ParseError> {
@@ -360,7 +411,50 @@ impl<'a> Parser<'a> {
             }));
         }
 
-        self.primary()
+        self.call()
+    }
+
+    fn call(&self) -> Result<Expr, ParseError> {
+        let mut expr = self.primary()?;
+
+        loop {
+            if self.match_kind(&[TokenKind::LeftParen]) {
+                expr = self.finish_call(expr)?;
+            } else {
+                break;
+            }
+        }
+
+        Ok(expr)
+    }
+
+    fn finish_call(&self, callee: Expr) -> Result<Expr, ParseError> {
+        let mut args = vec![];
+
+        if !self.check(&TokenKind::LeftParen) {
+            loop {
+                if args.len() >= 255 {
+                    return Err(ParseError::UserError {
+                        token: self.peek()?,
+                        message: format!("Cannot have more than 255 arguments"),
+                    });
+                }
+
+                args.push(self.expression()?);
+
+                if !self.match_kind(&[TokenKind::Comma]) {
+                    break;
+                }
+            }
+        }
+
+        let paren = self.consume(&TokenKind::RightParen, "Expected '(' after arguments list")?;
+
+        Ok(Expr::Call(Call {
+            callee: Box::new(callee),
+            paren: paren.clone(),
+            args,
+        }))
     }
 
     fn primary(&self) -> Result<Expr, ParseError> {

@@ -1,7 +1,10 @@
 use anyhow::Error;
 
 use crate::{
-    common::{EthNum, EthString, Expr, ExprVisitor, Stmt, StmtVisitor, Token, TokenKind, Value},
+    common::{
+        Callable, EthNum, EthString, Expr, ExprVisitor, Function, Stmt, StmtVisitor, Token,
+        TokenKind, Value,
+    },
     environment::Environment,
 };
 
@@ -181,6 +184,7 @@ impl Display for Value {
             Value::Str(s) => write!(f, "{}", s),
             Value::Bool(b) => write!(f, "{}", b),
             Value::Nil => write!(f, "nil"),
+            Value::Func(func) => write!(f, "<fn {}>", func.func.name),
         }
     }
 }
@@ -292,6 +296,31 @@ impl TryFrom<&Token> for Value {
     }
 }
 
+impl Callable<Output<Value>> for &Function {
+    type Output = Result<Output<Value>, anyhow::Error>;
+
+    fn arity(&self) -> usize {
+        self.func.params.len()
+    }
+
+    fn call(&self, interpreter: &Interpreter, args: Vec<Output<Value>>) -> Self::Output {
+        interpreter.with_new_scope(
+            |stmt| {
+                for (name, value) in self.func.params.iter().zip(args.into_iter()) {
+                    interpreter.define(name.clone(), value);
+                }
+
+                interpreter
+                    .visit_block_stmt(stmt)
+                    // TODO: Hardcoding to nil right now, will have an actual value once we have a return statement.
+                    .map(|_| (Value::Nil).into())
+            },
+            &self.func.body,
+            Some(interpreter.global()),
+        )
+    }
+}
+
 pub struct Interpreter {
     env: Environment,
     current: RefCell<usize>,
@@ -304,6 +333,39 @@ impl Interpreter {
             env,
             current: RefCell::new(current),
         }
+    }
+
+    pub fn define(&self, name: String, value: Output<Value>) {
+        self.env.define(self.current.borrow().clone(), name, value)
+    }
+
+    pub fn global(&self) -> usize {
+        if self.env.len() == 0 {
+            panic!("Trying to get global env without instantiating an env");
+        }
+
+        // The global env is always the first env instantiated when the interpreter
+        // is constructed.
+        0
+    }
+
+    pub fn with_new_scope<F, O>(&self, func: F, stmt: &Stmt, previous: Option<usize>) -> O
+    where
+        F: FnOnce(&Stmt) -> O,
+    {
+        // Store the current scope
+        let previous = previous.unwrap_or(self.current.borrow().clone());
+        let new_scope = self.env.instantiate_new_scope(Some(previous));
+        *self.current.borrow_mut() = new_scope;
+
+        let result = func(stmt);
+
+        self.env.drop_scope(self.current.borrow().clone());
+
+        // restore previous scope
+        *self.current.borrow_mut() = previous;
+
+        return result;
     }
 
     pub fn interpret(&self, stmts: &[Stmt]) -> Result<(), Error> {
@@ -446,9 +508,30 @@ impl ExprVisitor<VisitorResult> for Interpreter {
             .into())
         }
     }
+
+    fn visit_call(&self, expr: &Expr) -> VisitorResult {
+        if let Expr::Call(e) = expr {
+            let callee = self.visit_expr(&e.callee)?;
+
+            let mut arguments = vec![];
+            for arg in &e.args {
+                arguments.push(self.visit_expr(&arg)?);
+            }
+
+            callee.map(|val| {
+                let func = val.try_as_callable()?;
+                func.call(self, arguments)
+            })
+        } else {
+            Err(InterpreterError::Argument {
+                literal: format!("{:?}", expr),
+            }
+            .into())
+        }
+    }
 }
 
-type StmtResult = Result<(), Error>;
+pub type StmtResult = Result<(), Error>;
 
 impl StmtVisitor<StmtResult> for Interpreter {
     fn visit_expr_stmt(&self, stmt: &Stmt) -> StmtResult {
@@ -499,35 +582,18 @@ impl StmtVisitor<StmtResult> for Interpreter {
     }
 
     fn visit_block_stmt(&self, stmt: &Stmt) -> StmtResult {
-        if let Stmt::Block(stmts) = stmt {
-            // Store the current scope
-            let previous = self.current.borrow().clone();
-
-            {
-                // Instantiate and assign new scope
-                let new_scope = self.env.instantiate_new_scope(Some(previous));
-                *self.current.borrow_mut() = new_scope;
-            }
-
-            let result: StmtResult = {
-                for statement in stmts {
-                    self.visit_stmt(statement)?;
+        self.with_new_scope(
+            |stmt| {
+                if let Stmt::Block(stmts) = stmt {
+                    for statement in stmts {
+                        self.visit_stmt(statement)?;
+                    }
                 }
-
                 Ok(())
-            };
-
-            self.env.drop_scope(self.current.borrow().clone());
-
-            {
-                // restore previous scope
-                *self.current.borrow_mut() = previous;
-            }
-
-            return result;
-        }
-
-        Ok(())
+            },
+            stmt,
+            None,
+        )
     }
 
     fn visit_if_stmt(&self, stmt: &Stmt) -> StmtResult {
@@ -554,6 +620,22 @@ impl StmtVisitor<StmtResult> for Interpreter {
             while is_truthy(self.visit_expr(&while_stmt.cond)?.as_ref()) {
                 self.visit_stmt(&while_stmt.body)?;
             }
+        } else {
+            return Err(InterpreterError::Argument {
+                literal: format!("{:?}", stmt),
+            }
+            .into());
+        }
+
+        Ok(())
+    }
+
+    fn visit_func_stmt(&self, stmt: &Stmt) -> StmtResult {
+        if let Stmt::Func(func) = stmt {
+            // I know i'm cloning a bunch of data, but it's way too much hassle to refactor the
+            // entire interpreter to handle references
+            let function = Function { func: func.clone() };
+            self.define(func.name.clone(), Output::Val(Value::Func(function)));
         } else {
             return Err(InterpreterError::Argument {
                 literal: format!("{:?}", stmt),

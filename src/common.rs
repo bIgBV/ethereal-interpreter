@@ -4,6 +4,15 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
+use crate::interpreter::{Interpreter, Output, StmtResult};
+
+pub trait Callable<O> {
+    type Output;
+
+    fn arity(&self) -> usize;
+    fn call(&self, interpreter: &Interpreter, args: Vec<O>) -> Self::Output;
+}
+
 pub trait ExprVisitor<O> {
     fn visit_expr(&self, expr: &Expr) -> O {
         match expr {
@@ -14,6 +23,7 @@ pub trait ExprVisitor<O> {
             Expr::Variable(_) => self.visit_var(expr),
             Expr::Assign(_) => self.visit_assign(expr),
             Expr::Logical(_) => self.visit_logical(expr),
+            Expr::Call(_) => self.visit_call(expr),
         }
     }
 
@@ -24,6 +34,7 @@ pub trait ExprVisitor<O> {
     fn visit_var(&self, expr: &Expr) -> O;
     fn visit_assign(&self, expr: &Expr) -> O;
     fn visit_logical(&self, expr: &Expr) -> O;
+    fn visit_call(&self, expr: &Expr) -> O;
 }
 
 pub trait StmtVisitor<O> {
@@ -35,6 +46,7 @@ pub trait StmtVisitor<O> {
             Stmt::Block(_) => self.visit_block_stmt(stmt),
             Stmt::If(_) => self.visit_if_stmt(stmt),
             Stmt::While(_) => self.visit_while_stmt(stmt),
+            Stmt::Func(_) => self.visit_func_stmt(stmt),
         }
     }
 
@@ -44,6 +56,7 @@ pub trait StmtVisitor<O> {
     fn visit_block_stmt(&self, stmt: &Stmt) -> O;
     fn visit_if_stmt(&self, stmt: &Stmt) -> O;
     fn visit_while_stmt(&self, stmt: &Stmt) -> O;
+    fn visit_func_stmt(&self, stmt: &Stmt) -> O;
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -55,6 +68,7 @@ pub enum Expr {
     Variable(Token),
     Assign(Assign),
     Logical(Logical),
+    Call(Call),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -65,6 +79,21 @@ pub enum Stmt {
     Block(Vec<Stmt>),
     If(If),
     While(While),
+    Func(Func),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Func {
+    pub name: String,
+    pub params: Vec<String>,
+    pub body: Box<Stmt>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Call {
+    pub callee: Box<Expr>,
+    pub args: Vec<Expr>,
+    pub paren: Token,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -217,7 +246,27 @@ pub enum Value {
     Num(EthNum),
     Str(EthString),
     Bool(bool),
+    Func(Function),
     Nil,
+}
+
+impl Value {
+    pub fn try_as_callable<'a>(
+        &'a self,
+    ) -> Result<
+        impl Callable<Output<Value>, Output = Result<Output<Value>, anyhow::Error>> + 'a,
+        anyhow::Error,
+    > {
+        match self {
+            Value::Func(f) => Ok(f),
+            _ => Err(anyhow::anyhow!("Can only call functions and classes")),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Function {
+    pub func: Func,
 }
 
 #[derive(Clone, Eq, PartialEq, Hash, Ord, PartialOrd, Debug)]

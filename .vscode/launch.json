@@ -38,7 +38,7 @@
                 }
             },
             "args": [
-                "lox_scripts/control_flow.lox"
+                "lox_scripts/functions.lox"
             ],
             "cwd": "${workspaceFolder}"
         },

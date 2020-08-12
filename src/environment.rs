@@ -55,6 +55,10 @@ impl Environment {
         (env, scope)
     }
 
+    pub fn len(&self) -> usize {
+        self.values.borrow().len()
+    }
+
     pub fn assign(&self, env: usize, name: String, value: Output<Value>) -> Result<(), EnvError> {
         if let Some(map) = self.values.borrow().get(env) {
             if map.contains_key(&name) {
